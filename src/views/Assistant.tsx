@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { ChatMsg, SYSTEM_PROMPTS, chatStream } from "../lib/ai";
 import { useSettings } from "../hooks/useSettings";
 import { callRust, isTauri } from "../lib/tauri";
+import { Law, SAMPLE_LAWS, searchLaws } from "../data/laws";
 
 const MODES = ["通用", "审合同", "审质证"] as const;
 
@@ -280,6 +281,30 @@ export default function Assistant() {
     }
   }
 
+  /** RAG 检索：根据用户提问检索相关法条，注入回答上下文 */
+  async function fetchLawContext(text: string): Promise<string> {
+    try {
+      const k = text.length > 60 ? text.slice(0, 60) : text;
+      const laws: Law[] = desktop
+        ? (await callRust<Law[]>("laws_search", { keyword: k })) ?? []
+        : searchLaws(SAMPLE_LAWS, k);
+      if (laws.length === 0) return "";
+      const top = laws.slice(0, 4);
+      const lines = top.map(
+        (l) =>
+          `- ${l.title}${l.article_no ? ` ${l.article_no}` : ""}：${l.content.slice(0, 120)}${
+            l.content.length > 120 ? "…" : ""
+          }`,
+      );
+      return (
+        "\n\n【相关法条参考（回答时可引用；仅作检索参考，若与问题无关请忽略，不得编造法条）】\n" +
+        lines.join("\n")
+      );
+    } catch {
+      return "";
+    }
+  }
+
   async function send() {
     const text = input.trim();
     if (!text || busy) return;
@@ -293,7 +318,9 @@ export default function Assistant() {
       void callRust<void>("chat_session_rename", { id: activeId, title });
       setSessions((prev) => prev.map((s) => (s.id === activeId ? { ...s, title } : s)));
     }
-    const system: ChatMsg = { role: "system", content: SYSTEM_PROMPTS[mode] };
+    // RAG：检索相关法条注入上下文
+    const lawCtx = await fetchLawContext(text);
+    const system: ChatMsg = { role: "system", content: SYSTEM_PROMPTS[mode] + lawCtx };
     const history: ChatMsg[] = [...messages, { role: "user", content: text }];
     const aIdx = history.length; // 拼接 assistant 占位后的下标
     setMessages([...history, { role: "assistant", content: "" }]);
