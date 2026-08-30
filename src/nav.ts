@@ -14,6 +14,7 @@ export const NAV_ITEMS: NavItem[] = [
   { key: "assistant", label: "AI 助手", path: "/assistant" },
   { key: "translate", label: "翻译", path: "/translate" },
   { key: "todo", label: "待办提醒", path: "/todo" },
+  { key: "focus", label: "专注计时", path: "/focus" },
   { key: "settings", label: "数据设置", path: "/settings" },
   { key: "import", label: "数据导入", path: "/import" },
 ];

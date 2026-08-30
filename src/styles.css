@@ -11,6 +11,34 @@
   font-size: 14px;
 }
 
+/* ---------- 夜间模式 ---------- */
+:root[data-theme="dark"] {
+  --brand: #7a6cff;
+  --brand-soft: #26223a;
+  --brand-text: #cfc5ff;
+  --surface: #1f1f27;
+  --surface-muted: #17171d;
+  --border: #30303a;
+  --text: #e9e9ef;
+  --text-muted: #9b9ba6;
+}
+
+:root[data-theme="dark"] .danger-btn {
+  background: rgba(192, 57, 43, 0.16);
+  border-color: rgba(255, 138, 128, 0.35);
+  color: #ff8a80;
+}
+
+:root[data-theme="dark"] .danger-btn:hover {
+  background: rgba(192, 57, 43, 0.28);
+}
+
+:root[data-theme="dark"] input,
+:root[data-theme="dark"] textarea,
+:root[data-theme="dark"] select {
+  color-scheme: dark;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -1207,4 +1235,79 @@ button.primary.small {
 
 .danger-btn:hover {
   background: #fbdcd7;
+}
+
+/* ---------- 专注计时（番茄钟） ---------- */
+.focus-page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 560px;
+}
+
+.focus-ring-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 26px 20px;
+}
+
+.focus-ring-wrap {
+  position: relative;
+  width: 230px;
+  height: 230px;
+}
+
+.focus-ring-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.focus-mode {
+  font-size: 13px;
+  color: var(--text-muted);
+  letter-spacing: 2px;
+}
+
+.focus-time {
+  font-size: 44px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--brand-text);
+}
+
+.focus-task {
+  font-size: 13px;
+  color: var(--text-muted);
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.focus-task-input input {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 9px 12px;
+  font-size: 13px;
+  background: var(--surface);
+  color: var(--text);
+  outline: none;
+}
+
+.focus-task-input input:focus {
+  border-color: var(--brand);
+}
+
+.focus-controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
 }
