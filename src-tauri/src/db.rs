@@ -90,6 +90,18 @@ fn migrate(conn: &Connection) -> Result<(), String> {
     )
     .map_err(|e| e.to_string())?;
 
+    // 版块 4：AI 助手会话记录（按 seq 保持顺序，整体替换式保存）
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS chat_messages (
+            id      INTEGER PRIMARY KEY AUTOINCREMENT,
+            role    TEXT NOT NULL,
+            content TEXT NOT NULL,
+            seq     INTEGER NOT NULL
+        )",
+        [],
+    )
+    .map_err(|e| e.to_string())?;
+
     // 版块 2：法规表无数据时播种少量示例条文，便于即时体验检索
     seed_laws_if_empty(conn)?;
 
@@ -232,4 +244,41 @@ pub fn set_setting(conn: &Connection, key: &str, value: &str) -> Result<(), Stri
     )
     .map(|_| ())
     .map_err(|e| e.to_string())
+}
+
+/// 一条 AI 对话消息（与前端 ChatMsg 对应）
+#[derive(serde::Deserialize)]
+pub struct ChatMsg {
+    pub role: String,
+    pub content: String,
+}
+
+/// 读取 AI 助手会话记录（按 seq 排序）
+pub fn chat_history_load(conn: &Connection) -> Result<Vec<serde_json::Value>, String> {
+    let mut stmt = conn
+        .prepare("SELECT role, content FROM chat_messages ORDER BY seq")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |r| {
+            Ok(serde_json::json!({
+                "role": r.get::<_, String>(0)?,
+                "content": r.get::<_, String>(1)?,
+            }))
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+/// 整体保存 AI 助手会话（先清空再写入，保证与前端状态一致）
+pub fn chat_history_save(conn: &Connection, messages: &[ChatMsg]) -> Result<(), String> {
+    conn.execute("DELETE FROM chat_messages", [])
+        .map_err(|e| e.to_string())?;
+    for (i, m) in messages.iter().enumerate() {
+        conn.execute(
+            "INSERT INTO chat_messages(role, content, seq) VALUES (?1, ?2, ?3)",
+            rusqlite::params![m.role, m.content, i as i64],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }

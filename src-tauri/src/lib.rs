@@ -34,6 +34,20 @@ fn settings_set(conn: State<'_, DbState>, key: String, value: String) -> Result<
 }
 
 // ---------------------------------------------------------------------------
+// 版块 4：AI 助手会话记录（持久化到 SQLite，重启不丢）
+// ---------------------------------------------------------------------------
+
+#[tauri::command]
+fn chat_history_load(conn: State<'_, DbState>) -> Result<Vec<Value>, String> {
+    db::chat_history_load(&conn.lock().unwrap())
+}
+
+#[tauri::command]
+fn chat_history_save(conn: State<'_, DbState>, messages: Vec<db::ChatMsg>) -> Result<(), String> {
+    db::chat_history_save(&conn.lock().unwrap(), &messages)
+}
+
+// ---------------------------------------------------------------------------
 // 版块 2：法规查询
 // ---------------------------------------------------------------------------
 
@@ -359,6 +373,8 @@ pub fn run() {
             ping,
             settings_get,
             settings_set,
+            chat_history_load,
+            chat_history_save,
             laws_search,
             templates_list,
             templates_create,

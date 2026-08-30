@@ -28,24 +28,47 @@ export default function Assistant() {
     [s.ai],
   );
 
-  // 首次加载：从 localStorage 读取已有对话（大窗口与悬浮窗共享）
+  // 首次加载：桌面版从 SQLite 读取（持久化），浏览器从 localStorage 读取
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(LS_CHAT_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as ChatMsg[];
-        if (Array.isArray(parsed) && parsed.length > 0) setMessages(parsed);
+    (async () => {
+      try {
+        if (isTauri()) {
+          const list = await callRust<ChatMsg[]>("chat_history_load");
+          if (list && list.length > 0) {
+            setMessages(list);
+            // 同步给其他窗口（悬浮窗 ⇄ 大窗口）
+            localStorage.setItem(LS_CHAT_KEY, JSON.stringify(list));
+          }
+        } else {
+          const raw = localStorage.getItem(LS_CHAT_KEY);
+          if (raw) {
+            const parsed = JSON.parse(raw) as ChatMsg[];
+            if (Array.isArray(parsed) && parsed.length > 0) setMessages(parsed);
+          }
+        }
+      } catch {
+        /* ignore */
       }
-    } catch {
-      /* ignore */
-    }
-    setLoaded(true);
+      setLoaded(true);
+    })();
   }, []);
 
-  // 对话变化时持久化（加载完成前不写，避免覆盖另一窗口的记录）
+  // 对话变化时持久化（防抖 400ms）：
+  // - localStorage 作为跨窗口实时同步通道（storage 事件）
+  // - 桌面版额外写入 SQLite，重启不丢
   useEffect(() => {
     if (!loaded) return;
-    localStorage.setItem(LS_CHAT_KEY, JSON.stringify(messages));
+    const t = setTimeout(() => {
+      try {
+        localStorage.setItem(LS_CHAT_KEY, JSON.stringify(messages));
+      } catch {
+        /* ignore */
+      }
+      if (isTauri()) {
+        void callRust<void>("chat_history_save", { messages });
+      }
+    }, 400);
+    return () => clearTimeout(t);
   }, [messages, loaded]);
 
   // 监听其他窗口（悬浮窗 ⇄ 大窗口）的对话变更，实时同步
