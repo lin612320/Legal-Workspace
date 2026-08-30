@@ -381,16 +381,90 @@ fn import_data(_kind: String, _path: String) -> Result<String, String> {
 }
 
 // ---------------------------------------------------------------------------
+// 后台提醒：轮询待办，到期的发系统通知（每 30 秒一次）
+// ---------------------------------------------------------------------------
+
+fn check_todo_notifications(app: &AppHandle) {
+    use tauri_plugin_notification::NotificationExt;
+
+    let state = app.state::<DbState>();
+    let conn = match state.lock() {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+    let now = chrono::Local::now();
+
+    // 只挑「未完成 + 已开弹窗 + 有到期时间 + 该到期时间还没提醒过」的待办
+    let mut stmt = match conn.prepare(
+        "SELECT id, title, due_at, remind_minutes FROM todos
+         WHERE done = 0 AND desktop_popup = 1 AND due_at IS NOT NULL
+           AND (last_notified_due IS NULL OR last_notified_due != due_at)",
+    ) {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+    let rows = match stmt.query_map([], |r| {
+        Ok((
+            r.get::<_, i64>(0)?,
+            r.get::<_, String>(1)?,
+            r.get::<_, String>(2)?,
+            r.get::<_, i64>(3)?,
+        ))
+    }) {
+        Ok(r) => r,
+        Err(_) => return,
+    };
+
+    let mut pending: Vec<(i64, String, String)> = Vec::new();
+    for row in rows {
+        if let Ok((id, title, due_at, remind_minutes)) = row {
+            if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(&due_at) {
+                let due_local: chrono::DateTime<chrono::Local> = dt.with_timezone(&chrono::Local);
+                let remind = remind_minutes.max(0);
+                // 到期时刻 - 提前提醒分钟数 <= 当前时间 => 触发提醒
+                if due_local <= now + chrono::Duration::minutes(remind) {
+                    pending.push((id, title, due_at));
+                }
+            }
+        }
+    }
+    drop(stmt);
+
+    for (id, title, due_at) in pending {
+        // 记录已提醒的到期时间，避免同一到期时间重复提醒
+        let _ = conn.execute(
+            "UPDATE todos SET last_notified_due = ?1 WHERE id = ?2",
+            rusqlite::params![due_at, id],
+        );
+        let _ = app
+            .notification()
+            .builder()
+            .title("律政工作台 · 待办提醒")
+            .body(format!("「{title}」已到期或即将到期，请及时处理。"))
+            .show();
+    }
+}
+
+// ---------------------------------------------------------------------------
 // 入口
 // ---------------------------------------------------------------------------
 
 #[cfg_attr(mobile_desktop, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
             let conn = db::init(&dir)?;
             app.manage(Mutex::new(conn) as DbState);
+
+            // 后台线程：每 30 秒轮询一次待办，到期的发系统通知
+            let handle = app.handle().clone();
+            std::thread::spawn(move || loop {
+                std::thread::sleep(std::time::Duration::from_secs(30));
+                check_todo_notifications(&handle);
+            });
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

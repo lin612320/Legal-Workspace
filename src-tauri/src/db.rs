@@ -78,6 +78,28 @@ fn migrate(conn: &Connection) -> Result<(), String> {
     )
     .map_err(|e| e.to_string())?;
 
+    // 兼容迁移：todos 增加 last_notified_due（已提醒的到期时间，避免重复提醒）
+    let has_notified_col: bool = {
+        let mut stmt = conn
+            .prepare("PRAGMA table_info(todos)")
+            .map_err(|e| e.to_string())?;
+        let cols = stmt
+            .query_map([], |r| r.get::<_, String>(1))
+            .map_err(|e| e.to_string())?;
+        let mut found = false;
+        for c in cols {
+            if c.map_err(|e| e.to_string())? == "last_notified_due" {
+                found = true;
+                break;
+            }
+        }
+        found
+    };
+    if !has_notified_col {
+        conn.execute("ALTER TABLE todos ADD COLUMN last_notified_due TEXT", [])
+            .map_err(|e| e.to_string())?;
+    }
+
     // 版块 1：最近处理的文书
     conn.execute(
         "CREATE TABLE IF NOT EXISTS documents (
