@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useCurrentPage } from "../nav";
 
 const LS_THEME = "workbench:theme";
 
 export default function Topbar() {
   const page = useCurrentPage();
+  const nav = useNavigate();
   const [dark, setDark] = useState<boolean>(() => {
     try {
       return localStorage.getItem(LS_THEME) === "dark";
@@ -34,10 +36,10 @@ export default function Topbar() {
         >
           {dark ? "☀️ 日间" : "🌙 夜间"}
         </button>
-        <button className="ghost-btn" title="待办提醒开关（占位）">
+        <button className="ghost-btn" onClick={() => nav("/todo")} title="查看待办与提醒">
           提醒
         </button>
-        <button className="ghost-btn" title="设置（占位）">
+        <button className="ghost-btn" onClick={() => nav("/settings")} title="打开数据与设置">
           设置
         </button>
       </div>
