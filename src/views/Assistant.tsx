@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { ChatMsg, SYSTEM_PROMPTS, chatStream } from "../lib/ai";
 import { useSettings } from "../hooks/useSettings";
@@ -8,6 +8,111 @@ const MODES = ["通用", "审合同", "审质证"] as const;
 
 /** 聊天记录跨窗口共享键：大窗口 ⇄ 悬浮窗共用同一份对话 */
 const LS_CHAT_KEY = "workbench:chat";
+
+/** 轻量 Markdown 渲染：支持代码块、行内代码、加粗、列表、标题、空行分段 */
+function inline(text: string): ReactNode[] {
+  const parts = text.split(/(`[^`]+`|\*\*[^*]+\*\*)/g);
+  return parts.map((p, i) => {
+    if (p.startsWith("`") && p.endsWith("`") && p.length > 2) {
+      return (
+        <code key={i} className="md-inline-code">
+          {p.slice(1, -1)}
+        </code>
+      );
+    }
+    if (p.startsWith("**") && p.endsWith("**") && p.length > 4) {
+      return <strong key={i}>{p.slice(2, -2)}</strong>;
+    }
+    return <span key={i}>{p}</span>;
+  });
+}
+
+function renderMarkdown(text: string): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  const lines = text.split("\n");
+  let key = 0;
+  let codeBuf: string[] | null = null;
+  let listBuf: string[] | null = null;
+
+  const flushList = () => {
+    if (listBuf) {
+      nodes.push(
+        <ul key={key++} className="md-list">
+          {listBuf.map((item, i) => (
+            <li key={i}>{inline(item)}</li>
+          ))}
+        </ul>,
+      );
+      listBuf = null;
+    }
+  };
+
+  for (const raw of lines) {
+    const line = raw.trimEnd();
+    if (line.trim().startsWith("```")) {
+      flushList();
+      if (codeBuf) {
+        nodes.push(
+          <pre key={key++} className="md-code">
+            <code>{codeBuf.join("\n")}</code>
+          </pre>,
+        );
+        codeBuf = null;
+      } else {
+        codeBuf = [];
+      }
+      continue;
+    }
+    if (codeBuf) {
+      codeBuf.push(line);
+      continue;
+    }
+    const ulMatch = line.match(/^\s*[-*]\s+(.*)/);
+    const olMatch = line.match(/^\s*\d+[.)]\s+(.*)/);
+    if (ulMatch || olMatch) {
+      if (!listBuf) listBuf = [];
+      listBuf.push((ulMatch ?? olMatch)![1]);
+      continue;
+    }
+    flushList();
+    const t = line.trim();
+    if (!t) continue;
+    if (t.startsWith("### ")) {
+      nodes.push(
+        <h4 key={key++} className="md-h4">
+          {inline(t.slice(4))}
+        </h4>,
+      );
+    } else if (t.startsWith("## ")) {
+      nodes.push(
+        <h3 key={key++} className="md-h3">
+          {inline(t.slice(3))}
+        </h3>,
+      );
+    } else if (t.startsWith("# ")) {
+      nodes.push(
+        <h2 key={key++} className="md-h2">
+          {inline(t.slice(2))}
+        </h2>,
+      );
+    } else {
+      nodes.push(
+        <p key={key++} className="md-p">
+          {inline(t)}
+        </p>,
+      );
+    }
+  }
+  flushList();
+  if (codeBuf) {
+    nodes.push(
+      <pre key={key++} className="md-code">
+        <code>{codeBuf.join("\n")}</code>
+      </pre>,
+    );
+  }
+  return nodes;
+}
 
 export default function Assistant() {
   const { s } = useSettings();
@@ -21,6 +126,7 @@ export default function Assistant() {
   const [error, setError] = useState("");
   const [loaded, setLoaded] = useState(false); // 首次从 localStorage 加载完成
   const scrollRef = useRef<HTMLDivElement>(null);
+  const abortRef = useRef<AbortController | null>(null); // 中止当前生成
 
   const configured = !!(s.ai.baseUrl.trim() && s.ai.apiKey.trim());
   const cfg = useMemo(
@@ -106,9 +212,12 @@ export default function Assistant() {
     setInput("");
     setBusy(true);
     setError("");
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
     let full = "";
     try {
       await chatStream(cfg, [system, ...history], {
+        signal: ctrl.signal,
         onDelta: (d) => {
           full += d;
           setMessages((prev) => prev.map((m, i) => (i === aIdx ? { ...m, content: full } : m)));
@@ -116,17 +225,27 @@ export default function Assistant() {
         },
       });
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "请求失败";
-      setMessages((prev) =>
-        prev.map((m, i) =>
-          i === aIdx ? { ...m, content: m.content || `（出错了）${msg}` } : m,
-        ),
-      );
-      setError(msg);
+      if (e instanceof DOMException && e.name === "AbortError") {
+        // 用户主动停止：保留已生成内容，不当作错误提示
+      } else {
+        const msg = e instanceof Error ? e.message : "请求失败";
+        setMessages((prev) =>
+          prev.map((m, i) =>
+            i === aIdx ? { ...m, content: m.content || `（出错了）${msg}` } : m,
+          ),
+        );
+        setError(msg);
+      }
     } finally {
       setBusy(false);
+      abortRef.current = null;
       scrollToBottom();
     }
+  }
+
+  /** 中止当前生成 */
+  function stop() {
+    abortRef.current?.abort();
   }
 
   async function toFloat() {
@@ -163,7 +282,13 @@ export default function Assistant() {
             </button>
           )}
           {messages.length > 0 && (
-            <button className="ghost-btn" onClick={() => setMessages([])}>
+            <button
+              className="ghost-btn"
+              onClick={() => {
+                if (busy) stop();
+                setMessages([]);
+              }}
+            >
               清空
             </button>
           )}
@@ -189,7 +314,9 @@ export default function Assistant() {
         ) : (
           messages.map((m, i) => (
             <div key={i} className={`msg ${m.role === "user" ? "user" : "assistant"}`}>
-              <div className="msg-bubble">{m.content}</div>
+              <div className="msg-bubble">
+                {m.role === "assistant" && m.content ? renderMarkdown(m.content) : m.content}
+              </div>
             </div>
           ))
         )}
@@ -208,8 +335,12 @@ export default function Assistant() {
         />
         <div className="assistant-input-foot">
           <span className="muted">Ctrl/Command + Enter 发送</span>
-          <button className="primary small" onClick={() => void send()} disabled={busy || !input.trim()}>
-            {busy ? "生成中…" : "发送"}
+          <button
+            className="primary small"
+            onClick={() => void (busy ? stop() : send())}
+            disabled={!busy && !input.trim()}
+          >
+            {busy ? "停止" : "发送"}
           </button>
         </div>
       </div>

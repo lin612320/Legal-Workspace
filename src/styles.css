@@ -832,6 +832,61 @@ button.primary.danger:hover {
   border-bottom-left-radius: 4px;
 }
 
+/* ---------- AI 回复 Markdown 渲染 ---------- */
+.msg-bubble .md-p,
+.msg-bubble .md-h2,
+.msg-bubble .md-h3,
+.msg-bubble .md-h4,
+.msg-bubble .md-list {
+  white-space: normal;
+}
+
+.msg-bubble .md-p {
+  margin: 6px 0;
+}
+
+.msg-bubble .md-p:first-child {
+  margin-top: 0;
+}
+
+.msg-bubble .md-p:last-child {
+  margin-bottom: 0;
+}
+
+.msg-bubble .md-h2,
+.msg-bubble .md-h3,
+.msg-bubble .md-h4 {
+  margin: 10px 0 6px;
+  line-height: 1.4;
+}
+
+.msg-bubble .md-list {
+  margin: 6px 0;
+  padding-left: 20px;
+}
+
+.msg-bubble .md-list li {
+  margin: 3px 0;
+}
+
+.msg-bubble .md-code {
+  display: block;
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 6px;
+  padding: 8px 10px;
+  overflow-x: auto;
+  font-size: 12.5px;
+  white-space: pre;
+  margin: 6px 0;
+}
+
+.msg-bubble .md-inline-code {
+  background: rgba(0, 0, 0, 0.07);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 12.5px;
+}
+
 .assistant-input {
   display: flex;
   flex-direction: column;

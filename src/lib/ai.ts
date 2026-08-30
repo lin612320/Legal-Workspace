@@ -26,11 +26,12 @@ export const SYSTEM_PROMPTS: Record<string, string> = {
     "你是执业多年的出庭律师。请围绕证据的合法性、真实性、关联性，帮用户分析质证要点、质疑证据效力，或起草质证意见。结论要有依据、表述严谨。",
 };
 
-/** 流式对话：边返回边把增量交给 onDelta，结束后返回完整文本。 */
+/** 流式对话：边返回边把增量交给 onDelta，结束后返回完整文本。
+ *  传入 opts.signal 可随时中止（AbortController）。 */
 export async function chatStream(
   cfg: AIConfig,
   messages: ChatMsg[],
-  opts: { onDelta: (delta: string) => void },
+  opts: { onDelta: (delta: string) => void; signal?: AbortSignal },
 ): Promise<string> {
   const res = await fetch(normalizeEndpoint(cfg.baseUrl), {
     method: "POST",
@@ -44,6 +45,7 @@ export async function chatStream(
       stream: true,
       temperature: 0.7,
     }),
+    signal: opts.signal,
   });
   if (!res.ok) {
     let detail = "";
@@ -62,6 +64,10 @@ export async function chatStream(
   let buf = "";
   let full = "";
   for (;;) {
+    // 主动检查中止，避免等下一次 read 才返回
+    if (opts.signal?.aborted) {
+      throw new DOMException("已停止生成", "AbortError");
+    }
     const { done, value } = await reader.read();
     if (done) break;
     buf += decoder.decode(value, { stream: true });
