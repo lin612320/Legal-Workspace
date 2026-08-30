@@ -757,6 +757,42 @@ button.primary.danger:hover {
   flex-shrink: 0;
 }
 
+/* 会话栏（多会话切换） */
+.session-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding-bottom: 2px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.session-bar .chip {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-bar .chip-new {
+  font-weight: 600;
+  color: var(--brand);
+  flex-shrink: 0;
+}
+
+.session-bar .chip-count {
+  margin-left: 4px;
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.session-bar .session-del {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 12px;
+}
+
 .mode-chips,
 .assistant-actions {
   display: flex;

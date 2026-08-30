@@ -90,14 +90,59 @@ fn migrate(conn: &Connection) -> Result<(), String> {
     )
     .map_err(|e| e.to_string())?;
 
-    // 版块 4：AI 助手会话记录（按 seq 保持顺序，整体替换式保存）
+    // 版块 4：AI 助手会话（多会话：chat_sessions + chat_messages）
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS chat_sessions (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            title      TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )",
+        [],
+    )
+    .map_err(|e| e.to_string())?;
+
     conn.execute(
         "CREATE TABLE IF NOT EXISTS chat_messages (
-            id      INTEGER PRIMARY KEY AUTOINCREMENT,
-            role    TEXT NOT NULL,
-            content TEXT NOT NULL,
-            seq     INTEGER NOT NULL
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id INTEGER NOT NULL DEFAULT 0,
+            role       TEXT NOT NULL,
+            content    TEXT NOT NULL,
+            seq        INTEGER NOT NULL
         )",
+        [],
+    )
+    .map_err(|e| e.to_string())?;
+
+    // 兼容迁移：旧版 chat_messages 表无 session_id 列，补充添加
+    let has_session_col: bool = {
+        let mut stmt = conn
+            .prepare("PRAGMA table_info(chat_messages)")
+            .map_err(|e| e.to_string())?;
+        let cols = stmt
+            .query_map([], |r| r.get::<_, String>(1))
+            .map_err(|e| e.to_string())?;
+        let mut found = false;
+        for c in cols {
+            if c.map_err(|e| e.to_string())? == "session_id" {
+                found = true;
+                break;
+            }
+        }
+        found
+    };
+    if !has_session_col {
+        conn.execute(
+            "ALTER TABLE chat_messages ADD COLUMN session_id INTEGER NOT NULL DEFAULT 0",
+            [],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    // 旧数据（session_id=0）归入一个默认会话
+    conn.execute(
+        "INSERT OR IGNORE INTO chat_sessions(id, title, created_at, updated_at)
+         SELECT 0, '默认会话', datetime('now'), datetime('now')
+         WHERE EXISTS (SELECT 1 FROM chat_messages WHERE session_id = 0)",
         [],
     )
     .map_err(|e| e.to_string())?;
@@ -253,13 +298,70 @@ pub struct ChatMsg {
     pub content: String,
 }
 
-/// 读取 AI 助手会话记录（按 seq 排序）
-pub fn chat_history_load(conn: &Connection) -> Result<Vec<serde_json::Value>, String> {
+/// 会话列表（含消息数，按最近更新排序）
+pub fn chat_sessions_list(conn: &Connection) -> Result<Vec<serde_json::Value>, String> {
     let mut stmt = conn
-        .prepare("SELECT role, content FROM chat_messages ORDER BY seq")
+        .prepare(
+            "SELECT s.id, s.title, s.updated_at, COUNT(m.id)
+             FROM chat_sessions s
+             LEFT JOIN chat_messages m ON m.session_id = s.id
+             GROUP BY s.id
+             ORDER BY s.updated_at DESC",
+        )
         .map_err(|e| e.to_string())?;
     let rows = stmt
         .query_map([], |r| {
+            Ok(serde_json::json!({
+                "id": r.get::<_, i64>(0)?,
+                "title": r.get::<_, String>(1)?,
+                "updated_at": r.get::<_, String>(2)?,
+                "count": r.get::<_, i64>(3)?,
+            }))
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+/// 新建会话，返回 id
+pub fn chat_session_create(conn: &Connection, title: &str) -> Result<i64, String> {
+    let now = chrono::Local::now().to_rfc3339();
+    conn.execute(
+        "INSERT INTO chat_sessions(title, created_at, updated_at) VALUES (?1, ?2, ?2)",
+        rusqlite::params![title, now],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(conn.last_insert_rowid())
+}
+
+/// 重命名会话
+pub fn chat_session_rename(conn: &Connection, id: i64, title: &str) -> Result<(), String> {
+    conn.execute(
+        "UPDATE chat_sessions SET title = ?1 WHERE id = ?2",
+        rusqlite::params![title, id],
+    )
+    .map(|_| ())
+    .map_err(|e| e.to_string())
+}
+
+/// 删除会话（级联删除其消息）
+pub fn chat_session_delete(conn: &Connection, id: i64) -> Result<(), String> {
+    conn.execute("DELETE FROM chat_messages WHERE session_id = ?1", [id])
+        .map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM chat_sessions WHERE id = ?1", [id])
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+/// 读取指定会话的记录（按 seq 排序）
+pub fn chat_history_load(
+    conn: &Connection,
+    session_id: i64,
+) -> Result<Vec<serde_json::Value>, String> {
+    let mut stmt = conn
+        .prepare("SELECT role, content FROM chat_messages WHERE session_id = ?1 ORDER BY seq")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([session_id], |r| {
             Ok(serde_json::json!({
                 "role": r.get::<_, String>(0)?,
                 "content": r.get::<_, String>(1)?,
@@ -269,16 +371,26 @@ pub fn chat_history_load(conn: &Connection) -> Result<Vec<serde_json::Value>, St
     rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
 }
 
-/// 整体保存 AI 助手会话（先清空再写入，保证与前端状态一致）
-pub fn chat_history_save(conn: &Connection, messages: &[ChatMsg]) -> Result<(), String> {
-    conn.execute("DELETE FROM chat_messages", [])
+/// 整体保存指定会话（先清空再写入，保证与前端状态一致），并刷新 updated_at
+pub fn chat_history_save(
+    conn: &Connection,
+    session_id: i64,
+    messages: &[ChatMsg],
+) -> Result<(), String> {
+    conn.execute("DELETE FROM chat_messages WHERE session_id = ?1", [session_id])
         .map_err(|e| e.to_string())?;
     for (i, m) in messages.iter().enumerate() {
         conn.execute(
-            "INSERT INTO chat_messages(role, content, seq) VALUES (?1, ?2, ?3)",
-            rusqlite::params![m.role, m.content, i as i64],
+            "INSERT INTO chat_messages(session_id, role, content, seq) VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params![session_id, m.role, m.content, i as i64],
         )
         .map_err(|e| e.to_string())?;
     }
-    Ok(())
+    let now = chrono::Local::now().to_rfc3339();
+    conn.execute(
+        "UPDATE chat_sessions SET updated_at = ?1 WHERE id = ?2",
+        rusqlite::params![now, session_id],
+    )
+    .map(|_| ())
+    .map_err(|e| e.to_string())
 }

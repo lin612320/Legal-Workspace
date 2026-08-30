@@ -6,8 +6,21 @@ import { callRust, isTauri } from "../lib/tauri";
 
 const MODES = ["通用", "审合同", "审质证"] as const;
 
-/** 聊天记录跨窗口共享键：大窗口 ⇄ 悬浮窗共用同一份对话 */
+/** 聊天记录跨窗口同步键（大窗口 ⇄ 悬浮窗） */
 const LS_CHAT_KEY = "workbench:chat";
+
+/** 会话信息 */
+interface ChatSession {
+  id: number;
+  title: string;
+  count: number;
+}
+
+/** localStorage 同步负载：当前会话 + 消息 */
+interface SyncPayload {
+  sessionId: number | null;
+  messages: ChatMsg[];
+}
 
 /** 轻量 Markdown 渲染：支持代码块、行内代码、加粗、列表、标题、空行分段 */
 function inline(text: string): ReactNode[] {
@@ -118,15 +131,20 @@ export default function Assistant() {
   const { s } = useSettings();
   const { search } = useLocation();
   const isFloat = new URLSearchParams(search).get("float") === "1";
+  const desktop = isTauri();
 
   const [mode, setMode] = useState<string>("审合同");
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [loaded, setLoaded] = useState(false); // 首次从 localStorage 加载完成
+  const [loaded, setLoaded] = useState(false); // 首次加载完成
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [activeId, setActiveId] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null); // 中止当前生成
+  const activeIdRef = useRef<number | null>(null);
+  activeIdRef.current = activeId;
 
   const configured = !!(s.ai.baseUrl.trim() && s.ai.apiKey.trim());
   const cfg = useMemo(
@@ -134,22 +152,32 @@ export default function Assistant() {
     [s.ai],
   );
 
-  // 首次加载：桌面版从 SQLite 读取（持久化），浏览器从 localStorage 读取
+  // 首次加载：桌面版读取会话列表 + 最近会话，浏览器从 localStorage 读取
   useEffect(() => {
     (async () => {
       try {
-        if (isTauri()) {
-          const list = await callRust<ChatMsg[]>("chat_history_load");
-          if (list && list.length > 0) {
-            setMessages(list);
+        if (desktop) {
+          let list = (await callRust<ChatSession[]>("chat_sessions_list")) ?? [];
+          if (list.length === 0) {
+            const id = await callRust<number>("chat_session_create", { title: "新会话" });
+            if (id != null) list = [{ id, title: "新会话", count: 0 }];
+          }
+          const first = list[0];
+          setSessions(list);
+          setActiveId(first?.id ?? null);
+          if (first) {
+            const msgs =
+              (await callRust<ChatMsg[]>("chat_history_load", { session_id: first.id })) ?? [];
+            if (msgs.length > 0) setMessages(msgs);
             // 同步给其他窗口（悬浮窗 ⇄ 大窗口）
-            localStorage.setItem(LS_CHAT_KEY, JSON.stringify(list));
+            localStorage.setItem(LS_CHAT_KEY, JSON.stringify({ sessionId: first.id, messages: msgs }));
           }
         } else {
           const raw = localStorage.getItem(LS_CHAT_KEY);
           if (raw) {
-            const parsed = JSON.parse(raw) as ChatMsg[];
-            if (Array.isArray(parsed) && parsed.length > 0) setMessages(parsed);
+            const p = JSON.parse(raw) as SyncPayload;
+            if (Array.isArray(p.messages) && p.messages.length > 0) setMessages(p.messages);
+            if (p.sessionId != null) setActiveId(p.sessionId);
           }
         }
       } catch {
@@ -157,6 +185,7 @@ export default function Assistant() {
       }
       setLoaded(true);
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 对话变化时持久化（防抖 400ms）：
@@ -165,25 +194,36 @@ export default function Assistant() {
   useEffect(() => {
     if (!loaded) return;
     const t = setTimeout(() => {
+      const payload: SyncPayload = { sessionId: activeId, messages };
       try {
-        localStorage.setItem(LS_CHAT_KEY, JSON.stringify(messages));
+        localStorage.setItem(LS_CHAT_KEY, JSON.stringify(payload));
       } catch {
         /* ignore */
       }
-      if (isTauri()) {
-        void callRust<void>("chat_history_save", { messages });
+      if (desktop && activeId != null) {
+        void callRust<void>("chat_history_save", { session_id: activeId, messages });
       }
     }, 400);
     return () => clearTimeout(t);
-  }, [messages, loaded]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages, loaded, activeId]);
 
   // 监听其他窗口（悬浮窗 ⇄ 大窗口）的对话变更，实时同步
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
       if (e.key !== LS_CHAT_KEY || !e.newValue) return;
       try {
-        const parsed = JSON.parse(e.newValue) as ChatMsg[];
-        if (Array.isArray(parsed)) setMessages(parsed);
+        const p = JSON.parse(e.newValue) as SyncPayload;
+        if (p && Array.isArray(p.messages)) {
+          if (p.sessionId != null && p.sessionId !== activeIdRef.current) {
+            setActiveId(p.sessionId);
+            setSessions((prev) => {
+              if (prev.some((s) => s.id === p.sessionId)) return prev;
+              return [{ id: p.sessionId as number, title: "会话", count: p.messages.length }, ...prev];
+            });
+          }
+          setMessages(p.messages);
+        }
       } catch {
         /* ignore */
       }
@@ -198,12 +238,60 @@ export default function Assistant() {
     });
   }
 
+  /** 新建会话 */
+  async function newSession() {
+    if (!desktop) return;
+    if (busy) stop();
+    const id = await callRust<number>("chat_session_create", { title: "新会话" });
+    if (id == null) return;
+    setSessions((prev) => [{ id, title: "新会话", count: 0 }, ...prev]);
+    setActiveId(id);
+    setMessages([]);
+    setError("");
+  }
+
+  /** 切换到指定会话 */
+  async function switchSession(id: number) {
+    if (id === activeId || !desktop) return;
+    if (busy) stop();
+    setActiveId(id);
+    const msgs = (await callRust<ChatMsg[]>("chat_history_load", { session_id: id })) ?? [];
+    setMessages(msgs);
+    setError("");
+  }
+
+  /** 删除当前会话，自动切到最近会话或新建 */
+  async function deleteSession() {
+    if (activeId == null || !desktop) return;
+    if (busy) stop();
+    await callRust<void>("chat_session_delete", { id: activeId });
+    const rest = sessions.filter((s) => s.id !== activeId);
+    if (rest.length === 0) {
+      const id = await callRust<number>("chat_session_create", { title: "新会话" });
+      const fresh: ChatSession[] = id != null ? [{ id, title: "新会话", count: 0 }] : [];
+      setSessions(fresh);
+      setActiveId(fresh[0]?.id ?? null);
+      setMessages([]);
+    } else {
+      setSessions(rest);
+      setActiveId(rest[0].id);
+      const msgs = (await callRust<ChatMsg[]>("chat_history_load", { session_id: rest[0].id })) ?? [];
+      setMessages(msgs);
+    }
+  }
+
   async function send() {
     const text = input.trim();
     if (!text || busy) return;
     if (!configured) {
       setError("请先在「数据与设置」中配置 AI 接口地址与 Key。");
       return;
+    }
+    // 首条消息自动生成会话标题
+    if (messages.length === 0 && activeId != null && desktop) {
+      const title = text.length > 12 ? `${text.slice(0, 12)}…` : text;
+      void callRust<void>("chat_session_rename", { id: activeId, title });
+      setSessions((prev) => prev.map((s) => (s.id === activeId ? { ...s, title } : s)));
     }
     const system: ChatMsg = { role: "system", content: SYSTEM_PROMPTS[mode] };
     const history: ChatMsg[] = [...messages, { role: "user", content: text }];
@@ -250,7 +338,7 @@ export default function Assistant() {
 
   async function toFloat() {
     await callRust<void>("float_in");
-    if (!isTauri()) setError("悬浮窗仅桌面版可用（当前为浏览器预览）。");
+    if (!desktop) setError("悬浮窗仅桌面版可用（当前为浏览器预览）。");
   }
   async function toBig() {
     await callRust<void>("float_out");
@@ -258,6 +346,31 @@ export default function Assistant() {
 
   return (
     <div className={`assistant-page ${isFloat ? "float" : ""}`}>
+      {/* 会话栏（仅桌面版大窗口显示） */}
+      {!isFloat && desktop && (
+        <div className="session-bar">
+          <button className="chip chip-new" onClick={() => void newSession()}>
+            ＋ 新会话
+          </button>
+          {sessions.map((s) => (
+            <button
+              key={s.id}
+              className={`chip ${s.id === activeId ? "chip-active" : ""}`}
+              onClick={() => void switchSession(s.id)}
+              title={s.title}
+            >
+              {s.title}
+              {s.count > 0 && <span className="chip-count">{s.count}</span>}
+            </button>
+          ))}
+          {activeId != null && (
+            <button className="ghost-btn session-del" onClick={() => void deleteSession()}>
+              删除当前会话
+            </button>
+          )}
+        </div>
+      )}
+
       {/* 顶栏：模式 + 窗口切换 */}
       <div className="assistant-bar">
         <div className="mode-chips">

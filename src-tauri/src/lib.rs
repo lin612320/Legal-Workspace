@@ -34,17 +34,41 @@ fn settings_set(conn: State<'_, DbState>, key: String, value: String) -> Result<
 }
 
 // ---------------------------------------------------------------------------
-// 版块 4：AI 助手会话记录（持久化到 SQLite，重启不丢）
+// 版块 4：AI 助手会话（多会话，持久化到 SQLite，重启不丢）
 // ---------------------------------------------------------------------------
 
 #[tauri::command]
-fn chat_history_load(conn: State<'_, DbState>) -> Result<Vec<Value>, String> {
-    db::chat_history_load(&conn.lock().unwrap())
+fn chat_sessions_list(conn: State<'_, DbState>) -> Result<Vec<Value>, String> {
+    db::chat_sessions_list(&conn.lock().unwrap())
 }
 
 #[tauri::command]
-fn chat_history_save(conn: State<'_, DbState>, messages: Vec<db::ChatMsg>) -> Result<(), String> {
-    db::chat_history_save(&conn.lock().unwrap(), &messages)
+fn chat_session_create(conn: State<'_, DbState>, title: String) -> Result<i64, String> {
+    db::chat_session_create(&conn.lock().unwrap(), &title)
+}
+
+#[tauri::command]
+fn chat_session_rename(conn: State<'_, DbState>, id: i64, title: String) -> Result<(), String> {
+    db::chat_session_rename(&conn.lock().unwrap(), id, &title)
+}
+
+#[tauri::command]
+fn chat_session_delete(conn: State<'_, DbState>, id: i64) -> Result<(), String> {
+    db::chat_session_delete(&conn.lock().unwrap(), id)
+}
+
+#[tauri::command]
+fn chat_history_load(conn: State<'_, DbState>, session_id: i64) -> Result<Vec<Value>, String> {
+    db::chat_history_load(&conn.lock().unwrap(), session_id)
+}
+
+#[tauri::command]
+fn chat_history_save(
+    conn: State<'_, DbState>,
+    session_id: i64,
+    messages: Vec<db::ChatMsg>,
+) -> Result<(), String> {
+    db::chat_history_save(&conn.lock().unwrap(), session_id, &messages)
 }
 
 // ---------------------------------------------------------------------------
@@ -373,6 +397,10 @@ pub fn run() {
             ping,
             settings_get,
             settings_set,
+            chat_sessions_list,
+            chat_session_create,
+            chat_session_rename,
+            chat_session_delete,
             chat_history_load,
             chat_history_save,
             laws_search,
