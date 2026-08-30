@@ -371,13 +371,98 @@ fn float_out(app: AppHandle) -> Result<(), String> {
 }
 
 // ---------------------------------------------------------------------------
-// 版块 8：数据导入（预留接口，后接 Excel 解析）
+// 版块 8：数据导入（Excel：法规 / 模板）
 // ---------------------------------------------------------------------------
 
+/// 从 Excel 导入法规或模板数据。
+/// kind = "laws"（列：title/chapter/article_no/content/source）或
+/// kind = "templates"（列：title/category/content/file_type）。
+/// 表头支持中英文列名；返回 { imported, skipped }。
 #[tauri::command]
-fn import_data(_kind: String, _path: String) -> Result<String, String> {
-    // TODO: 接入 Excel 读取与字段映射（见数据库搭建指引）
-    Ok("导入接口已预留，待接入 Excel 解析后启用".into())
+fn import_excel(conn: State<'_, DbState>, kind: String, path: String) -> Result<Value, String> {
+    use calamine::{Data, Reader, Xlsx};
+
+    let mut workbook: Xlsx<_> =
+        calamine::open_workbook(&path).map_err(|e| format!("打开 Excel 失败：{e}"))?;
+    let sheet = workbook
+        .worksheet_range_at(0)
+        .ok_or_else(|| "Excel 中没有工作表".to_string())?
+        .map_err(|e| format!("读取工作表失败：{e}"))?;
+
+    let mut rows = sheet.rows();
+    let header = rows
+        .next()
+        .ok_or_else(|| "Excel 为空（缺少表头行）".to_string())?;
+
+    let cell_str = |d: &Data| -> Option<String> {
+        match d {
+            Data::String(s) => Some(s.clone()),
+            Data::Float(f) => Some(f.to_string()),
+            Data::Int(i) => Some(i.to_string()),
+            Data::DateTimeIso(s) => Some(s.clone()),
+            _ => None,
+        }
+    };
+    let col = |name: &str| -> Option<usize> {
+        header.iter().position(|h| {
+            cell_str(h)
+                .map(|s| s.trim().to_lowercase() == name)
+                .unwrap_or(false)
+        })
+    };
+    let title_col = col("title").or_else(|| col("标题"));
+    let content_col = col("content").or_else(|| col("内容"));
+    if title_col.is_none() || content_col.is_none() {
+        return Err("表头缺少 title/标题 或 content/内容 列".into());
+    }
+
+    let c = conn.lock().unwrap();
+    let mut imported = 0usize;
+    let mut skipped = 0usize;
+    for row in rows {
+        let title = title_col
+            .and_then(|i| row.get(i))
+            .and_then(cell_str)
+            .map(|s| s.trim().to_string())
+            .unwrap_or_default();
+        let content = content_col
+            .and_then(|i| row.get(i))
+            .and_then(cell_str)
+            .map(|s| s.trim().to_string())
+            .unwrap_or_default();
+        if title.is_empty() || content.is_empty() {
+            skipped += 1;
+            continue;
+        }
+        if kind == "templates" {
+            let category = col("category").or_else(|| col("分类")).and_then(|i| row.get(i)).and_then(cell_str);
+            let file_type = col("file_type").or_else(|| col("类型")).and_then(|i| row.get(i)).and_then(cell_str);
+            c.execute(
+                "INSERT INTO templates(title, category, content, file_type, built_in)
+                 VALUES (?1, ?2, ?3, ?4, 0)",
+                rusqlite::params![title, category, content, file_type.unwrap_or_else(|| "txt".into())],
+            )
+            .map_err(|e| e.to_string())?;
+        } else {
+            let chapter = col("chapter").or_else(|| col("章节")).and_then(|i| row.get(i)).and_then(cell_str);
+            let article_no = col("article_no").or_else(|| col("条文号")).and_then(|i| row.get(i)).and_then(cell_str);
+            let source = col("source").or_else(|| col("来源")).and_then(|i| row.get(i)).and_then(cell_str);
+            c.execute(
+                "INSERT INTO laws(title, chapter, article_no, content, source)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                rusqlite::params![
+                    title,
+                    chapter,
+                    article_no,
+                    content,
+                    source.unwrap_or_else(|| "Excel 导入".into())
+                ],
+            )
+            .map_err(|e| e.to_string())?;
+        }
+        imported += 1;
+    }
+    Ok(json!({ "imported": imported, "skipped": skipped }))
 }
 
 // ---------------------------------------------------------------------------
@@ -490,7 +575,7 @@ pub fn run() {
             restore,
             float_in,
             float_out,
-            import_data,
+            import_excel,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
