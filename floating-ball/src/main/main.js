@@ -18,7 +18,8 @@ const BRIDGE_FILE = path.join(BRIDGE_DIR, 'to-workbench.json');
 // 律政 → 悬浮球 控制文件（反向通道）
 const CTRL_FILE = path.join(BRIDGE_DIR, 'from-workbench.json');
 // 律政工作台项目路径（用于 spawn Tauri dev 进程）
-const WORKBENCH_DIR = path.join(os.homedir(), 'Desktop', 'Legal-Workspace');
+// floating-ball 放在 Legal-Workspace 内部，main.js 往上 3 级就是根
+const WORKBENCH_DIR = path.resolve(__dirname, '..', '..', '..');
 
 let config = null;
 let tray = null;

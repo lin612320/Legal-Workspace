@@ -5,8 +5,8 @@ import fs from "node:fs";
 import os from "node:os";
 import { spawn } from "node:child_process";
 
-// floating-ball 项目根目录
-const BALL_DIR = path.join(os.homedir(), "Desktop", "floating-ball");
+// floating-ball 项目根目录（相对当前 Legal-Workspace 目录）
+const BALL_DIR = path.resolve(__dirname, "floating-ball");
 
 // 找 Electron 可执行文件（和 Rust 端 resolve_electron 一致）
 function resolveElectron(): string | null {

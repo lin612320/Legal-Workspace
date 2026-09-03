@@ -6,7 +6,7 @@ const os = require('os');
 const fs = require('fs');
 
 const ROOT = path.resolve(__dirname, '..');
-const BALL_DIR = path.join(os.homedir(), 'Desktop', 'floating-ball');
+const BALL_DIR = path.resolve(ROOT, 'floating-ball');
 
 // 启动前清理残留 Vite 进程（端口 TIME_WAIT / 旧 vite 没退出）
 function killPort(port) {
