@@ -1,6 +1,6 @@
 [package]
 name = "legal-workbench"
-version = "0.3.0"
+version = "0.3.1"
 description = "律政工作台 —— 法律工作者本地桌面助手"
 authors = ["you"]
 edition = "2021"

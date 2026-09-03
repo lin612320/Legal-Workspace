@@ -118,12 +118,14 @@ fn resolve_ball() -> Option<BallSource> {
             return Some(src);
         }
     }
-    // 2. 与主程序 exe 同目录（含 tauri resources 子目录）
+    // 2. 与主程序 exe 同目录 / `resources` 子目录（发布形态）
+    //    悬浮球装入版本化子目录（如 win-unpacked-0.3.1），升级时新目录不受旧进程文件占用影响，
+    //    故此处用有限递归探测，兼容「直接放根目录」与「放版本化子目录」两种布局。
     if let Some(exe_dir) = main_exe_dir() {
-        if let Some(src) = probe_dir(&exe_dir) {
+        if let Some(src) = find_ball_recursive(&exe_dir, 2) {
             return Some(src);
         }
-        if let Some(src) = probe_dir(&exe_dir.join("resources")) {
+        if let Some(src) = find_ball_recursive(&exe_dir.join("resources"), 3) {
             return Some(src);
         }
         // 3. NSIS `_up_` 备份布局兜底（旧版安装包把资源装到这里）

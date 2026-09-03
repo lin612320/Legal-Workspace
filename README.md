@@ -2,7 +2,7 @@
 
 > 法律工作者本地桌面助手 —— 单机运行，数据全部保存在本机。
 
-律政工作台是一个面向律师、法务等法律工作者的本地桌面应用，围绕日常办案流程提供法规查询、文书模板、AI 辅助、翻译、待办提醒等一体化工具。**配套「悬浮球助手」桌面常驻小球**，选中文字即可翻译、检索或询问 AI。当前版本 `0.3.0`。
+律政工作台是一个面向律师、法务等法律工作者的本地桌面应用，围绕日常办案流程提供法规查询、文书模板、AI 辅助、翻译、待办提醒等一体化工具。**配套「悬浮球助手」桌面常驻小球**，选中文字即可翻译、检索或询问 AI。当前版本 `0.3.1`。
 
 ## 技术栈
 
@@ -51,12 +51,13 @@
 
 检测逻辑位于 `src/lib/tauri.ts` 的 `isTauri()`（判断 `window.__TAURI_INTERNALS__` 是否存在）。
 
-主应用查找悬浮球按以下顺序（满足其一即可）：
+主应用查找悬浮球按以下顺序（满足其一即可，均支持子目录递归）：
 
 1. 环境变量 `FLOATING_BALL_DIR` 指向的目录（开发/自定路径）
-2. 主程序 exe 同目录 / `resources` 子目录（发布形态：`win-unpacked/悬浮球助手.exe`）
+2. 主程序 exe 同目录 / `resources` 子目录（发布形态：悬浮球随包装入 `win-unpacked-<版本>` 版本化目录，升级不覆盖旧文件）
 3. 主程序 exe 旁 `_up_` 目录（兼容旧版安装包布局）
-4. 用户桌面 `floating-ball`（开发形态：`node_modules/electron/...`）
+4. 项目仓库内 `floating-ball`（开发形态，`CARGO_MANIFEST_DIR` 上一级）
+5. 用户桌面 `floating-ball`（旧开发形态兜底）
 
 律政 → 悬浮球命令通过共享控制文件 `%APPDATA%\floating-ball\from-workbench.json` 下发（show / hide / prefill / translate / quit），悬浮球常驻轮询执行。
 
@@ -127,9 +128,10 @@ npm run tauri build
 
 ## 打包与发布
 
-- 主应用安装包：`npm run tauri build` → `src-tauri/target/release/bundle/nsis/律政工作台_0.3.0_x64-setup.exe`（内嵌悬浮球 win-unpacked，安装即用）。
+- 主应用安装包：`npm run tauri build` → `src-tauri/target/release/bundle/nsis/律政工作台_0.3.1_x64-setup.exe`。安装包内嵌悬浮球，装入**版本化子目录**（如 `win-unpacked-0.3.1`），升级安装不会与正在运行的旧悬浮球发生文件占用冲突。
 - 悬浮球便携版（独立使用）：在 `floating-ball/` 下 `npm run dist` → `floating-ball/dist/悬浮球助手 1.0.0.exe`。
 - 完整交付物统一放入 `发布包/`。
+- **升级提示**：升级前请退出正在运行的律政工作台主程序；托盘中的旧悬浮球可保留（新版主程序会自动定位新版悬浮球，下次重启生效）。
 
 ## 当前状态与已知缺口
 
