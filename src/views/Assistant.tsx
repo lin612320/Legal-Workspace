@@ -4,6 +4,7 @@ import { ChatMsg, SYSTEM_PROMPTS, chatStream } from "../lib/ai";
 import { useSettings } from "../hooks/useSettings";
 import { callRust, isTauri } from "../lib/tauri";
 import { Law, SAMPLE_LAWS, searchLaws } from "../data/laws";
+import { onBallPush, type BallPushPayload } from "../lib/ball";
 
 const MODES = ["通用", "审合同", "审质证"] as const;
 
@@ -232,6 +233,23 @@ export default function Assistant() {
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
   }, []);
+
+  // 监听悬浮球推送过来的文字 → 自动预填到对话输入框
+  useEffect(() => {
+    if (!desktop) return;
+    let unlisten: (() => void) | null = null;
+    (async () => {
+      unlisten = await onBallPush((payload: BallPushPayload) => {
+        const q = payload.text.trim();
+        if (!q) return;
+        // 悬浮球推的是选中文字，作为用户问题发送
+        setInput((prev) => (prev ? prev + "\n" + q : q));
+      });
+    })();
+    return () => {
+      unlisten?.();
+    };
+  }, [desktop]);
 
   function scrollToBottom() {
     requestAnimationFrame(() => {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCurrentPage } from "../nav";
+import { ballShow, ballQuit } from "../lib/ball";
 
 const LS_THEME = "workbench:theme";
 
@@ -29,6 +30,13 @@ export default function Topbar() {
     <header className="topbar">
       <h1 className="page-title">{page.label}</h1>
       <div className="topbar-actions">
+        <button
+          className="ghost-btn"
+          onClick={() => ballShow()}
+          title="唤起桌面悬浮球（AI 快速助手）"
+        >
+          🎯 悬浮球
+        </button>
         <button
           className="ghost-btn"
           onClick={() => setDark((d) => !d)}

@@ -1,5 +1,6 @@
 // 律政工作台 —— Rust 后端入口 + Tauri 命令桥接
 
+mod ball;
 mod db;
 
 use std::fs;
@@ -543,6 +544,11 @@ pub fn run() {
             let conn = db::init(&dir)?;
             app.manage(Mutex::new(conn) as DbState);
 
+            // 自动拉起 Electron 悬浮球（子进程模式）
+            let _ = ball::ball_start();
+            // 启动 floating-ball → 律政 桥接轮询
+            ball::start_bridge_poller(app.handle().clone());
+
             // 后台线程：每 30 秒轮询一次待办，到期的发系统通知
             let handle = app.handle().clone();
             std::thread::spawn(move || loop {
@@ -576,6 +582,13 @@ pub fn run() {
             float_in,
             float_out,
             import_excel,
+            // 悬浮球（Electron）集成
+            ball::ball_start_cmd,
+            ball::ball_show,
+            ball::ball_hide,
+            ball::ball_prefill,
+            ball::ball_translate,
+            ball::ball_quit,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

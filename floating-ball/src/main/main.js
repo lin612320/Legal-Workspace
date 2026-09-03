@@ -1,0 +1,418 @@
+// 主进程入口
+const { app, ipcMain, globalShortcut, Tray, Menu, nativeImage, screen } = require('electron');
+const path = require('path');
+const os = require('os');
+const fs = require('fs');
+const { spawn } = require('child_process');
+
+const { load, save } = require('./config');
+const { getSkin, listBallSkins, getPanelTheme, listPanelThemes, getBallSkin } = require('./skins');
+const windows = require('./windows');
+const { grabSelection } = require('./selection');
+const { runTask, normalizeBaseURL } = require('./ai');
+const hook = require('./hook');
+
+// 共享桥接文件路径（%APPDATA%/floating-ball/to-workbench.json）
+const BRIDGE_DIR = path.join(os.homedir(), 'AppData', 'Roaming', 'floating-ball');
+const BRIDGE_FILE = path.join(BRIDGE_DIR, 'to-workbench.json');
+// 律政 → 悬浮球 控制文件（反向通道）
+const CTRL_FILE = path.join(BRIDGE_DIR, 'from-workbench.json');
+// 律政工作台项目路径（用于 spawn Tauri dev 进程）
+const WORKBENCH_DIR = path.join(os.homedir(), 'Desktop', 'Legal-Workspace');
+
+let config = null;
+let tray = null;
+let currentController = null;
+let dragTimer = null; // 悬浮球拖动轮询定时器
+
+// 单实例锁：父项目启动时若已存在，则直接唤起面板
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
+  // 第二个实例需要把命令行参数透传给已运行实例
+  // Electron 在 Windows 上 second-instance 会自动触发，
+  // 这里快速退出即可（app.exit 强制退出，避免残留进程）
+  app.exit(0);
+}
+
+// 解析命令行参数（Node/Electron 会带 node/electron 路径，跳过前两个）
+function parseArgs(argv) {
+  const out = {};
+  for (const a of argv.slice(2)) {
+    if (a === '--child') out.child = true;
+    else if (a === '--dev') out.dev = true;
+    else if (a.startsWith('--cmd=')) out.cmd = a.slice(6);
+    else if (a.startsWith('--prefill=')) out.prefill = decodeURIComponent(a.slice(10));
+    else if (a.startsWith('--run=')) {
+      try { out.run = JSON.parse(decodeURIComponent(a.slice(6))); } catch {}
+    }
+  }
+  return out;
+}
+
+app.on('second-instance', (_e, argv) => {
+  const args = parseArgs(argv);
+  // 优先级：run > prefill > cmd
+  if (args.run && typeof args.run === 'object') {
+    const { kind, opts } = args.run;
+    if (['translate', 'relate', 'ask'].includes(kind)) {
+      windows.showPanel(config);
+      windows.sendToPanel('selection:result', opts.text || opts.question || '');
+      // 通知面板直接跑任务（通过 IPC：向已打开面板注入 startTask）
+      windows.sendToPanel('external:runTask', { kind, opts });
+    }
+  } else if (args.prefill !== undefined) {
+    windows.showPanel(config);
+    windows.sendToPanel('selection:result', args.prefill);
+  } else if (args.cmd === 'show') {
+    windows.showPanel(config);
+  } else if (args.cmd === 'hide') {
+    windows.hidePanel();
+  } else if (args.cmd === 'quit') {
+    windows.destroyAll();
+    app.quit();
+  } else {
+    // 默认行为：显示小窗
+    windows.showPanel(config);
+  }
+});
+
+function registerHotkey() {
+  // 先注销旧的，再注册当前配置的快捷键
+  globalShortcut.unregisterAll();
+  try {
+    globalShortcut.register(config.hotkey, async () => {
+      const text = await grabSelection();
+      windows.showPanel(config);
+      windows.sendToPanel('selection:result', text);
+    });
+  } catch (e) {
+    console.error('注册快捷键失败:', e);
+  }
+}
+
+function setupTray() {
+  // 系统托盘图标：用 1x1 透明 + 文字兜底太麻烦，这里用 nativeImage 创建简易图标
+  const iconPath = path.join(__dirname, '..', '..', 'assets', 'icon.png');
+  let image;
+  try {
+    image = nativeImage.createFromPath(iconPath);
+    if (image.isEmpty()) image = nativeImage.createEmpty();
+  } catch {
+    image = nativeImage.createEmpty();
+  }
+  tray = new Tray(image.isEmpty() ? nativeImage.createEmpty() : image);
+  const menu = Menu.buildFromTemplate([
+    { label: '显示悬浮球', click: () => windows.showBall(config) },
+    { label: '隐藏悬浮球', click: () => windows.hideBall() },
+    { type: 'separator' },
+    { label: '抓取选中文字', click: async () => {
+      const t = await grabSelection();
+      windows.showBall(config);
+      windows.showPanel(config);
+      windows.sendToPanel('selection:result', t);
+    }},
+    { type: 'separator' },
+    { label: '退出', click: () => { quitApp(); } }
+  ]);
+  tray.setToolTip('悬浮球助手');
+  tray.setContextMenu(menu);
+  // 托盘双击：显示悬浮球
+  tray.on('double-click', () => windows.showBall(config));
+}
+
+function quitApp() {
+  windows.destroyAll();
+  app.quit();
+}
+
+module.exports = { quitApp };
+
+function registerIpc() {
+  // 悬浮球点击：切换面板
+  ipcMain.on('ball:click', () => {
+    windows.togglePanel(config);
+  });
+
+  // 悬浮球拖动：主进程轮询光标移动窗口（不受窗口边界限制，可随意拖动）
+  ipcMain.on('ball:start-drag', () => {
+    const ball = windows.getBall();
+    if (!ball || ball.isDestroyed()) return;
+    // 拖动时隐藏对话气泡（按需求：拖动不弹对话）
+    windows.hideBubble();
+    const start = screen.getCursorScreenPoint();
+    const [bx, by] = ball.getPosition();
+    if (dragTimer) clearInterval(dragTimer);
+    dragTimer = setInterval(() => {
+      const cur = screen.getCursorScreenPoint();
+      ball.setPosition(bx + cur.x - start.x, by + cur.y - start.y);
+    }, 16);
+  });
+  ipcMain.on('ball:stop-drag', () => {
+    if (dragTimer) { clearInterval(dragTimer); dragTimer = null; }
+  });
+
+  // 桌宠悬停对话气泡
+  ipcMain.on('ball:enter', () => {
+    const skin = getSkin(config.skin);
+    const lines = (skin.pet && skin.pet.dialogues) || ['你好~'];
+    const text = lines[Math.floor(Math.random() * lines.length)];
+    windows.showBubble(text);
+  });
+  ipcMain.on('ball:leave', () => windows.hideBubble());
+
+  // 小窗顶栏拖动：按位移移动窗口
+  ipcMain.on('panel:move', (_e, { dx, dy }) => {
+    const panel = windows.getPanel();
+    if (!panel || panel.isDestroyed()) return;
+    const [x, y] = panel.getPosition();
+    panel.setPosition(x + dx, y + dy);
+  });
+
+  // 获取状态（配置 + 皮肤列表 + 主题列表）
+  ipcMain.handle('state:get', () => ({
+    config,
+    skins: listBallSkins(),
+    themes: listPanelThemes()
+  }));
+
+  // 抓取选中文字
+  ipcMain.handle('selection:grab', async () => {
+    const t = await grabSelection();
+    return t;
+  });
+
+  // 运行 AI 任务（流式）
+  ipcMain.on('task:run', async (_evt, payload) => {
+    const { kind, opts, id } = payload;
+    if (currentController) currentController.abort();
+    currentController = new AbortController();
+    try {
+      await runTask(config, kind, opts, (chunk) => {
+        windows.sendToPanel('task:chunk', { id, chunk });
+      }, currentController.signal);
+      windows.sendToPanel('task:done', { id });
+    } catch (e) {
+      if (e.name === 'AbortError') {
+        windows.sendToPanel('task:done', { id, aborted: true });
+      } else {
+        windows.sendToPanel('task:error', { id, message: String(e.message || e) });
+      }
+    } finally {
+      if (currentController?.signal?.aborted || currentController) {
+        currentController = null;
+      }
+    }
+  });
+
+  // 中止当前任务
+  ipcMain.on('task:stop', () => {
+    if (currentController) currentController.abort();
+  });
+
+  // 切换球皮肤
+  ipcMain.on('skin:set', (_evt, skinId) => {
+    if (!getBallSkin(skinId)) return;
+    config.skin = skinId;
+    save(config);
+    windows.applySkinToBall(config);
+    // 同步皮肤选择窗口的选中态（如果已打开）
+    const sp = windows.getSkinPicker();
+    if (sp && !sp.isDestroyed()) sp.webContents.send('apply-skin', skinId);
+  });
+
+  // 打开球皮肤选择窗口
+  ipcMain.on('skin-picker:open', () => windows.createSkinPicker(config));
+  ipcMain.on('skin-picker:close', () => {
+    const sp = windows.getSkinPicker();
+    if (sp && !sp.isDestroyed()) sp.close();
+  });
+  // 皮肤选择窗口拖动
+  ipcMain.on('skin-picker:move', (_e, { dx, dy }) => {
+    const sp = windows.getSkinPicker();
+    if (!sp || sp.isDestroyed()) return;
+    const [x, y] = sp.getPosition();
+    sp.setPosition(x + dx, y + dy);
+  });
+
+  // 切换面板主题
+  ipcMain.on('theme:set', (_evt, themeId) => {
+    if (!getPanelTheme(themeId)) return;
+    config.theme = themeId;
+    save(config);
+    windows.applySkinToPanel(config);
+  });
+
+  // AI Key 测试：调 /models 端点验证 key 是否有效（用 normalizeBaseURL 和实际请求一致）
+  ipcMain.handle('ai:testKey', async (_evt, { baseURL, apiKey }) => {
+    try {
+      const url = `${normalizeBaseURL(baseURL)}/models`;
+      const res = await fetch(url, {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${apiKey}` }
+      });
+      if (res.ok) return { ok: true, message: '✓ Key 有效，AI 可正常使用' };
+      const body = await res.text().catch(() => '');
+      let msg = `✗ 请求失败 (${res.status})`;
+      try {
+        const j = JSON.parse(body);
+        if (j.error?.message) msg += `: ${j.error.message}`;
+      } catch { if (body) msg += `: ${body.slice(0, 200)}`; }
+      return { ok: false, message: msg };
+    } catch (e) {
+      return { ok: false, message: `✗ 网络错误: ${e.message || e}` };
+    }
+  });
+
+  // 保存配置（深合并）
+  ipcMain.handle('config:save', (_evt, patch) => {
+    function dm(t, s) {
+      for (const k of Object.keys(s)) {
+        if (s[k] && typeof s[k] === 'object' && !Array.isArray(s[k])) {
+          t[k] = dm(t[k] || {}, s[k]);
+        } else { t[k] = s[k]; }
+      }
+      return t;
+    }
+    dm(config, patch);
+    // 自动规范化 baseURL（防用户误填网页地址）
+    if (config.ai?.baseURL) {
+      config.ai.baseURL = normalizeBaseURL(config.ai.baseURL);
+    }
+    save(config);
+    if (patch.hotkey) registerHotkey();
+    windows.applySkinToBall(config);
+    windows.applySkinToPanel(config);
+    return config;
+  });
+
+  // 关闭面板（仅隐藏）
+  ipcMain.on('panel:hide', () => windows.hidePanel());
+
+  // 退出应用
+  ipcMain.on('app:quit', () => {
+    windows.destroyAll();
+    app.quit();
+  });
+
+  // 推送到律政工作台：写桥接文件 + spawn（如未运行）
+  ipcMain.handle('workbench:push', (_evt, { text, action }) => {
+    try {
+      if (!fs.existsSync(BRIDGE_DIR)) fs.mkdirSync(BRIDGE_DIR, { recursive: true });
+      const msg = {
+        ts: Date.now(),
+        text: text || '',
+        action: action || 'prefill' // prefill | translate | ask
+      };
+      fs.writeFileSync(BRIDGE_FILE, JSON.stringify(msg, null, 2), 'utf8');
+      // 尝试拉起律政工作台（dev 模式下 spawn npm run dev）
+      spawnWorkbenchIfNeeded();
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: String(e.message || e) };
+    }
+  });
+}
+
+// 拉起律政工作台（dev 模式：npm run dev）
+// detached + unref 使律政独立运行，悬浮球退出不影响律政
+let workbenchSpawned = false;
+function spawnWorkbenchIfNeeded() {
+  if (workbenchSpawned) return;
+  if (!fs.existsSync(WORKBENCH_DIR)) return;
+  workbenchSpawned = true;
+  try {
+    const proc = spawn('cmd', ['/c', 'npm run dev'], {
+      cwd: WORKBENCH_DIR,
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: false
+    });
+    proc.unref();
+  } catch (e) {
+    console.warn('拉起律政工作台失败:', e.message);
+  }
+}
+
+app.whenReady().then(() => {
+  config = load();
+  // 启动时自动修正可能错误的 baseURL（如用户粘了控制台网页地址）
+  const fixed = normalizeBaseURL(config.ai?.baseURL);
+  if (fixed && fixed !== config.ai.baseURL) {
+    config.ai.baseURL = fixed;
+    save(config);
+  }
+  // 命令行参数：--child 表示由其他项目拉起，--dev 打开 DevTools
+  const cli = parseArgs(process.argv);
+  if (cli.child) config.childMode = true;
+
+  windows.createBall(config, () => windows.togglePanel(config));
+  windows.createBubble();
+  setupTray();
+
+  // 独立启动时才注册全局快捷键和鼠标钩子，避免与父项目冲突
+  if (!config.childMode) {
+    registerHotkey();
+    registerIpc();
+
+    // 全局鼠标选取自动抓取：松开左键且有拖动选取时触发
+    hook.setArmed(true);
+    hook.start(async () => {
+      await new Promise((r) => setTimeout(r, 150));
+      const text = await grabSelection();
+      if (text) {
+        windows.showPanel(config);
+        windows.sendToPanel('selection:result', text);
+      }
+    });
+  } else {
+    registerIpc(); // IPC 仍需注册，子进程也要能响应面板内按钮
+  }
+
+  // 开发模式打开 DevTools
+  if (cli.dev) {
+    const p = windows.showPanel(config);
+    p.webContents.openDevTools({ mode: 'detach' });
+  }
+
+  // 律政 → 悬浮球 反向控制：轮询 from-workbench.json
+  // browser/Vite 模式无法直接 spawn electron，通过文件发命令
+  let lastCmdTs = 0;
+  setInterval(() => {
+    try {
+      if (!fs.existsSync(CTRL_FILE)) return;
+      const content = fs.readFileSync(CTRL_FILE, 'utf8');
+      const msg = JSON.parse(content);
+      if (msg.ts && msg.ts > lastCmdTs) {
+        lastCmdTs = msg.ts;
+        const cmd = msg.cmd;
+        console.log(`[ctrl] 收到律政命令: ${cmd}`);
+        if (cmd === 'show') {
+          // 显示球（如果被隐藏了）+ 打开面板
+          const ball = windows.getBall();
+          if (ball && !ball.isDestroyed() && !ball.isVisible()) ball.show();
+          windows.showPanel(config);
+        } else if (cmd === 'hide') {
+          windows.hidePanel();
+        } else if (cmd === 'quit') {
+          windows.destroyAll();
+          app.quit();
+        } else if (cmd === 'prefill' && typeof msg.text === 'string') {
+          windows.showPanel(config);
+          windows.sendToPanel('selection:result', msg.text);
+        }
+        try { fs.unlinkSync(CTRL_FILE); } catch {}
+      }
+    } catch {}
+  }, 1000);
+});
+
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll();
+  hook.stop();
+  if (dragTimer) { clearInterval(dragTimer); dragTimer = null; }
+});
+
+// 即使没有可见窗口也保持运行（系统托盘常驻）
+app.on('window-all-closed', (e) => {
+  e.preventDefault();
+});
