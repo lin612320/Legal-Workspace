@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCurrentPage } from "../nav";
-import { ballShow, ballQuit } from "../lib/ball";
+import { ballShow } from "../lib/ball";
 
 const LS_THEME = "workbench:theme";
 

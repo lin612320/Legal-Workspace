@@ -35,10 +35,13 @@ if (!gotLock) {
   app.exit(0);
 }
 
-// 解析命令行参数（Node/Electron 会带 node/electron 路径，跳过前两个）
+// 解析命令行参数（兼容开发态与打包态）
+// 开发态 argv 形如 [electron.exe, 项目目录, --child, ...]；
+// 打包态 argv 形如 [悬浮球助手.exe, --child, ...]，没有 app 目录占位。
+// 这里只识别已知 flag，其余位置参数（目录等）自然忽略。
 function parseArgs(argv) {
   const out = {};
-  for (const a of argv.slice(2)) {
+  for (const a of argv.slice(1)) {
     if (a === '--child') out.child = true;
     else if (a === '--dev') out.dev = true;
     else if (a.startsWith('--cmd=')) out.cmd = a.slice(6);
@@ -400,6 +403,13 @@ app.whenReady().then(() => {
         } else if (cmd === 'prefill' && typeof msg.text === 'string') {
           windows.showPanel(config);
           windows.sendToPanel('selection:result', msg.text);
+        } else if (cmd === 'translate' && typeof msg.text === 'string') {
+          windows.showPanel(config);
+          windows.sendToPanel('selection:result', msg.text);
+          windows.sendToPanel('external:runTask', {
+            kind: 'translate',
+            opts: { text: msg.text, target: msg.target || '英文' }
+          });
         }
         try { fs.unlinkSync(CTRL_FILE); } catch {}
       }

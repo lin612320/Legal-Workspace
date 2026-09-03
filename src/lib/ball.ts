@@ -8,11 +8,7 @@
 import { callRust, isTauri } from "./tauri";
 import { listen } from "@tauri-apps/api/event";
 
-/** 律政 → 悬浮球 反向控制文件路径（和 floating-ball main.js 一致） */
-const CTRL_FILE = `${import.meta.env.APPDATA || ""}/floating-ball/from-workbench.json`;
-
-// HMR 模式下拿不到 APPDATA，用 vite-ball-bridge 共享同一目录思路
-// 这里直接写绝对路径（前端访问不了文件系统，所以用 fetch 调 Vite 插件来写）
+// 前端（浏览器）访问不了文件系统，反向控制通过 fetch 调 Vite 插件来写控制文件
 async function sendBallCmd(cmd: string, extra: Record<string, unknown> = {}) {
   if (isTauri()) return; // Tauri 走 Rust invoke，不进这里
   // Vite 模式：通过 fetch POST 给 Vite 插件，插件写控制文件

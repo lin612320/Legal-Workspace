@@ -7,7 +7,7 @@ use std::fs;
 use std::sync::Mutex;
 
 use serde_json::{json, Value};
-use tauri::{AppHandle, Manager, State, WebviewUrl, WebviewWindowBuilder, WindowEvent};
+use tauri::{AppHandle, Manager, State};
 
 use db::DbState;
 
@@ -311,53 +311,26 @@ fn restore(app: AppHandle, file: String) -> Result<String, String> {
 // ---------------------------------------------------------------------------
 // 版块 4：AI 助手 —— 置顶悬浮窗 ⇄ 大窗口切换
 // ---------------------------------------------------------------------------
+// 悬浮窗（label = "float"）在 tauri.conf.json 中预声明：启动即创建、默认隐藏。
+// 运行时不再动态 WebviewWindowBuilder::build()（Windows 上二次建窗不可靠，
+// 曾导致 build 挂起、页面空白）。float_in/out 只做显示与隐藏切换。
 
-/// 确保置顶悬浮窗存在（label = "float"，always-on-top 小窗）。
-fn ensure_float(app: &AppHandle) -> Result<(), String> {
+/// 收起到置顶悬浮窗：显示悬浮窗、隐藏主窗口。
+#[tauri::command]
+fn float_in(app: AppHandle) -> Result<(), String> {
     if let Some(w) = app.get_webview_window("float") {
         let _ = w.show();
         let _ = w.set_focus();
-        return Ok(());
+    } else {
+        return Err("悬浮窗不存在（启动异常），请重启应用".into());
     }
-    WebviewWindowBuilder::new(
-        app,
-        "float",
-        WebviewUrl::App("index.html#/assistant?float=1".into()),
-    )
-    .title("AI 助手 · 悬浮")
-    .inner_size(380.0, 500.0)
-    .min_inner_size(320.0, 400.0)
-    .resizable(true)
-    .always_on_top(true)
-    .build()
-    .map_err(|e| e.to_string())?;
-
-    // 关闭悬浮窗时恢复主窗口，避免应用"消失"
-    let app = app.clone();
-    if let Some(w) = app.get_webview_window("float") {
-        w.on_window_event(move |event| {
-            if let WindowEvent::CloseRequested { .. } = event {
-                if let Some(main) = app.get_webview_window("main") {
-                    let _ = main.show();
-                    let _ = main.set_focus();
-                }
-            }
-        });
-    }
-    Ok(())
-}
-
-/// 收起到置顶悬浮窗：隐藏主窗口，显示/创建悬浮窗。
-#[tauri::command]
-fn float_in(app: AppHandle) -> Result<(), String> {
-    ensure_float(&app)?;
     if let Some(m) = app.get_webview_window("main") {
         let _ = m.hide();
     }
     Ok(())
 }
 
-/// 放大回大窗口：显示主窗口并关闭悬浮窗。
+/// 放大回大窗口：显示主窗口并收起悬浮窗。
 #[tauri::command]
 fn float_out(app: AppHandle) -> Result<(), String> {
     if let Some(m) = app.get_webview_window("main") {
@@ -366,7 +339,7 @@ fn float_out(app: AppHandle) -> Result<(), String> {
         let _ = m.set_focus();
     }
     if let Some(w) = app.get_webview_window("float") {
-        let _ = w.close();
+        let _ = w.hide();
     }
     Ok(())
 }
@@ -548,6 +521,23 @@ pub fn run() {
             let _ = ball::ball_start();
             // 启动 floating-ball → 律政 桥接轮询
             ball::start_bridge_poller(app.handle().clone());
+
+            // 悬浮窗点“关闭”= 收起：拦截销毁、隐藏悬浮窗并恢复主窗口
+            if let Some(float_win) = app.get_webview_window("float") {
+                let app_h = app.handle().clone();
+                float_win.on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                        api.prevent_close();
+                        if let Some(f) = app_h.get_webview_window("float") {
+                            let _ = f.hide();
+                        }
+                        if let Some(m) = app_h.get_webview_window("main") {
+                            let _ = m.show();
+                            let _ = m.set_focus();
+                        }
+                    }
+                });
+            }
 
             // 后台线程：每 30 秒轮询一次待办，到期的发系统通知
             let handle = app.handle().clone();
