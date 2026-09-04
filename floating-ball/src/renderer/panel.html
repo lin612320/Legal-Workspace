@@ -48,7 +48,7 @@
   .body { flex:1 1 auto; display:flex; flex-direction:column; padding:10px; gap:8px; overflow:auto; }
   .field { display:flex; flex-direction:column; gap:6px; }
   .label { font-size:12px; color:var(--muted); }
-  textarea, input[type=text], select {
+  textarea, input, select {
     width:100%; background:var(--input-bg); color:var(--text);
     border:1px solid var(--border); border-radius:10px;
     padding:9px 10px; font-size:13px; outline:none; font-family:inherit;
@@ -112,6 +112,43 @@
     background:transparent; color:var(--muted); cursor:pointer; font-size:12px;
   }
   .hotkey-btn:hover { color:var(--accent); border-color:var(--accent); }
+
+  /* 抓取模式切换（分段控件，选中态强对比） */
+  .grab-box { display:flex; gap:8px; }
+  .grab-opt {
+    flex:1; position:relative;
+    display:flex; align-items:center; justify-content:center; gap:6px;
+    padding:10px 0; border-radius:10px; font-size:13px; cursor:pointer;
+    border:1.5px solid var(--border); background:var(--input-bg); color:var(--muted);
+    font-weight:500; transition: all .18s ease;
+  }
+  .grab-opt .grab-ico { font-size:15px; filter: grayscale(1) opacity(.7); transition: all .18s; }
+  .grab-opt:hover { border-color:var(--accent); color:var(--text); }
+  /* 选中：实心渐变 + 发光 + 白字 + 图标高亮 + 右上角对勾 */
+  .grab-opt.active {
+    color:#fff; font-weight:700;
+    background: linear-gradient(135deg, var(--accent), #7c5cff);
+    border-color: var(--accent);
+    box-shadow: 0 4px 14px rgba(88,166,255,.45), inset 0 0 0 1px rgba(255,255,255,.15);
+  }
+  .grab-opt.active .grab-ico { filter:none; transform: scale(1.1); }
+  .grab-opt.active::after {
+    content: '✓'; position:absolute; top:-7px; right:-6px;
+    width:18px; height:18px; line-height:18px; text-align:center;
+    background:#3fb950; color:#fff; font-size:11px; font-weight:700;
+    border-radius:50%; box-shadow:0 1px 4px rgba(0,0,0,.4);
+  }
+  .grab-hint { font-size:11px; color:var(--muted); line-height:1.5; min-height:16px; }
+
+  /* 文本拖入面板提示 */
+  body.drop-active::after {
+    content: '松开以放入文本';
+    position: fixed; inset: 8px; z-index: 9999;
+    display: flex; align-items: center; justify-content: center;
+    border: 2px dashed var(--accent); border-radius: 12px;
+    background: rgba(88,166,255,.12); color: var(--accent);
+    font-size: 15px; font-weight: 600; pointer-events: none;
+  }
 
   .modal-mask {
     position:fixed; inset:0; background:rgba(0,0,0,.5);
@@ -185,7 +222,7 @@
       </select>
     </div>
     <div class="row"><label>API 地址</label><input type="text" id="cfgBase" placeholder="https://api.deepseek.com/v1" /></div>
-    <div class="row"><label>API Key</label><input type="text" id="cfgKey" placeholder="sk-..." /></div>
+    <div class="row"><label>API Key</label><input type="password" id="cfgKey" placeholder="sk-..." autocomplete="off" /></div>
     <div class="row"><label>模型</label><input type="text" id="cfgModel" placeholder="deepseek-chat" /></div>
     <div class="row"><label>快捷键</label>
       <div class="hotkey-box" id="hotkeyBox">
@@ -193,6 +230,14 @@
         <button class="hotkey-btn" id="hotkeyRecord">录制</button>
         <button class="hotkey-btn" id="hotkeyReset">重置</button>
       </div>
+    </div>
+    <div class="row" style="flex-direction:column; align-items:stretch; gap:6px;">
+      <label>抓取模式</label>
+      <div class="grab-box" id="grabBox">
+        <button type="button" class="grab-opt" id="grabAuto"><span class="grab-ico">🔄</span><span class="grab-name">自动抓取</span></button>
+        <button type="button" class="grab-opt" id="grabManual"><span class="grab-ico">✋</span><span class="grab-name">手动拖入</span></button>
+      </div>
+      <div class="grab-hint" id="grabHint"></div>
     </div>
     <div class="row" style="justify-content:flex-end; gap:6px;">
       <button class="btn" id="btnTest" style="flex:0 0 auto; width:90px;">测试 Key</button>

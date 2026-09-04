@@ -44,6 +44,15 @@
   @keyframes pulse  { 0%,100%{transform:scale(1)} 50%{transform:scale(1.1)} }
   .ball.dragging { animation: var(--anim, wobble) .6s infinite ease-in-out; }
   .ball.dragging .face { animation: inherit; }
+
+  /* 文本拖入悬停态（手动抓取模式） */
+  .ball.drop-hover {
+    transform: scale(1.15);
+    box-shadow: 0 0 0 3px rgba(88,166,255,.9), 0 8px 22px rgba(0,0,0,.4);
+  }
+  .ball.drop-hover .face::before { content: '📥'; }
+  .ball.drop-hover .face { font-size: 0; }
+  .ball.drop-hover .face::before { font-size: 26px; }
 </style>
 </head>
 <body>

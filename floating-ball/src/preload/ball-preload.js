@@ -9,6 +9,8 @@ contextBridge.exposeInMainWorld('ballApi', {
   // 悬停对话气泡
   hover: () => ipcRenderer.send('ball:enter'),
   leave: () => ipcRenderer.send('ball:leave'),
+  // 文本拖入悬浮球（手动抓取模式）
+  dropText: (text) => ipcRenderer.send('ball:drop-text', text),
   // 接收完整皮肤对象（含 pet 桌宠配置）
   onSkin: (cb) => {
     const handler = (_e, skin) => cb(skin);

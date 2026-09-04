@@ -80,6 +80,23 @@ window.addEventListener('mouseup', (e) => {
   dragging = false;
 });
 
+// ---- 文本拖入（手动抓取模式：把选中文字拖到球上）----
+ball.addEventListener('dragenter', (e) => {
+  e.preventDefault();
+  ball.classList.add('drop-hover');
+});
+ball.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+});
+ball.addEventListener('dragleave', () => ball.classList.remove('drop-hover'));
+ball.addEventListener('drop', (e) => {
+  e.preventDefault();
+  ball.classList.remove('drop-hover');
+  const text = (e.dataTransfer && (e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('text'))) || '';
+  if (text.trim() && window.ballApi) window.ballApi.dropText(text.trim());
+});
+
 // 默认外观，收到主进程皮肤前先有一帧可用
 applySkin({
   ball: { from: '#43e97b', to: '#38f9d7' },

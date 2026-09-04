@@ -9,7 +9,7 @@ const { load, save } = require('./config');
 const { getSkin, listBallSkins, getPanelTheme, listPanelThemes, getBallSkin } = require('./skins');
 const windows = require('./windows');
 const { grabSelection } = require('./selection');
-const { runTask, normalizeBaseURL } = require('./ai');
+const { runTask, normalizeBaseURL, httpFetchWithHint } = require('./ai');
 const hook = require('./hook');
 
 // 共享桥接文件路径（%APPDATA%/floating-ball/to-workbench.json）
@@ -35,13 +35,12 @@ if (!gotLock) {
   app.exit(0);
 }
 
-// 解析命令行参数（兼容开发态与打包态）
-// 开发态 argv 形如 [electron.exe, 项目目录, --child, ...]；
-// 打包态 argv 形如 [悬浮球助手.exe, --child, ...]，没有 app 目录占位。
-// 这里只识别已知 flag，其余位置参数（目录等）自然忽略。
+// 解析命令行参数
+// 开发态 argv = [electron.exe, app目录, --child, ...]；打包态 argv = [悬浮球助手.exe, --child, ...]
+// 直接扫描全部参数、只识别已知标志，两种模式都兼容
 function parseArgs(argv) {
   const out = {};
-  for (const a of argv.slice(1)) {
+  for (const a of argv) {
     if (a === '--child') out.child = true;
     else if (a === '--dev') out.dev = true;
     else if (a.startsWith('--cmd=')) out.cmd = a.slice(6);
@@ -94,6 +93,27 @@ function registerHotkey() {
   }
 }
 
+// 抓取模式切换：钩子常驻运行（start 幂等），只用 armed 控制是否触发。
+// 不用 hook.stop()/start()——uiohook-napi 停止后再次 start 经常挂不回，
+// 导致切回自动模式时抓取静默失效。
+let hookSelectCb = null;
+function applyGrabMode() {
+  if (!hookSelectCb) {
+    hookSelectCb = async () => {
+      await new Promise((r) => setTimeout(r, 150));
+      const text = await grabSelection();
+      if (text) {
+        windows.showPanel(config);
+        windows.sendToPanel('selection:result', text);
+      }
+    };
+    hook.start(hookSelectCb);
+  }
+  const manual = config.grabMode === 'manual';
+  hook.setArmed(!manual);
+  console.log('[hook] 抓取模式：', manual ? '手动拖入（自动抓取关闭）' : '自动抓取');
+}
+
 function setupTray() {
   // 系统托盘图标：用 1x1 透明 + 文字兜底太麻烦，这里用 nativeImage 创建简易图标
   const iconPath = path.join(__dirname, '..', '..', 'assets', 'icon.png');
@@ -135,6 +155,14 @@ function registerIpc() {
   // 悬浮球点击：切换面板
   ipcMain.on('ball:click', () => {
     windows.togglePanel(config);
+  });
+
+  // 拖文字到悬浮球（手动抓取模式的主要入口）
+  ipcMain.on('ball:drop-text', (_e, text) => {
+    if (typeof text === 'string' && text.trim()) {
+      windows.showPanel(config);
+      windows.sendToPanel('selection:result', text.trim());
+    }
   });
 
   // 悬浮球拖动：主进程轮询光标移动窗口（不受窗口边界限制，可随意拖动）
@@ -247,13 +275,11 @@ function registerIpc() {
   });
 
   // AI Key 测试：调 /models 端点验证 key 是否有效（用 normalizeBaseURL 和实际请求一致）
+  // 用 Electron net.fetch（Chromium 网络栈），与正式请求一致地走系统代理
   ipcMain.handle('ai:testKey', async (_evt, { baseURL, apiKey }) => {
     try {
       const url = `${normalizeBaseURL(baseURL)}/models`;
-      const res = await fetch(url, {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${apiKey}` }
-      });
+      const res = await httpFetchWithHint(url, { headers: { Authorization: `Bearer ${apiKey}` } });
       if (res.ok) return { ok: true, message: '✓ Key 有效，AI 可正常使用' };
       const body = await res.text().catch(() => '');
       let msg = `✗ 请求失败 (${res.status})`;
@@ -263,7 +289,7 @@ function registerIpc() {
       } catch { if (body) msg += `: ${body.slice(0, 200)}`; }
       return { ok: false, message: msg };
     } catch (e) {
-      return { ok: false, message: `✗ 网络错误: ${e.message || e}` };
+      return { ok: false, message: `✗ ${e.message || e}` };
     }
   });
 
@@ -284,6 +310,7 @@ function registerIpc() {
     }
     save(config);
     if (patch.hotkey) registerHotkey();
+    if (patch.grabMode) applyGrabMode();
     windows.applySkinToBall(config);
     windows.applySkinToPanel(config);
     return config;
@@ -317,22 +344,45 @@ function registerIpc() {
   });
 }
 
-// 拉起律政工作台（dev 模式：npm run dev）
+// 拉起律政工作台：直接运行打包好的 exe（不再 spawn 源码/dev 服务器）
+function resolveWorkbenchExe() {
+  const candidates = [];
+  if (app.isPackaged) {
+    // 打包态：优先球 exe 同目录（两个 exe 放一起即可），再找桌面
+    const exeDir = path.dirname(app.getPath('exe'));
+    candidates.push(path.join(exeDir, 'legal-workbench.exe'));
+    candidates.push(path.join(os.homedir(), 'Desktop', 'legal-workbench.exe'));
+  } else {
+    // 开发态：Tauri 编译产物 → 项目根 → 桌面
+    candidates.push(path.join(WORKBENCH_DIR, 'src-tauri', 'target', 'release', 'legal-workbench.exe'));
+    candidates.push(path.join(WORKBENCH_DIR, 'legal-workbench.exe'));
+    candidates.push(path.join(os.homedir(), 'Desktop', 'legal-workbench.exe'));
+  }
+  return candidates.find((p) => fs.existsSync(p)) || null;
+}
+
 // detached + unref 使律政独立运行，悬浮球退出不影响律政
 let workbenchSpawned = false;
 function spawnWorkbenchIfNeeded() {
   if (workbenchSpawned) return;
-  if (!fs.existsSync(WORKBENCH_DIR)) return;
+  const exe = resolveWorkbenchExe();
+  if (!exe) {
+    console.warn('[workbench] 未找到 legal-workbench.exe，跳过拉起（桥接文件仍会写入，浏览器/dev 模式可接收）');
+    return;
+  }
   workbenchSpawned = true;
   try {
-    const proc = spawn('cmd', ['/c', 'npm run dev'], {
-      cwd: WORKBENCH_DIR,
+    console.log('[workbench] 拉起律政工作台 exe:', exe);
+    const proc = spawn(exe, [], {
       detached: true,
       stdio: 'ignore',
       windowsHide: false
     });
     proc.unref();
+    proc.on('error', () => { workbenchSpawned = false; });
+    proc.on('exit', () => { workbenchSpawned = false; });
   } catch (e) {
+    workbenchSpawned = false;
     console.warn('拉起律政工作台失败:', e.message);
   }
 }
@@ -346,31 +396,19 @@ app.whenReady().then(() => {
     save(config);
   }
   // 命令行参数：--child 表示由其他项目拉起，--dev 打开 DevTools
+  // 注意：child 是运行时标志，绝不写入配置文件（历史版本误写会导致钩子被永久禁用）
   const cli = parseArgs(process.argv);
-  if (cli.child) config.childMode = true;
 
   windows.createBall(config, () => windows.togglePanel(config));
   windows.createBubble();
   setupTray();
 
-  // 独立启动时才注册全局快捷键和鼠标钩子，避免与父项目冲突
-  if (!config.childMode) {
-    registerHotkey();
-    registerIpc();
+  registerIpc();
+  // 全局快捷键始终注册（手动触发抓取不受抓取模式影响）
+  registerHotkey();
 
-    // 全局鼠标选取自动抓取：松开左键且有拖动选取时触发
-    hook.setArmed(true);
-    hook.start(async () => {
-      await new Promise((r) => setTimeout(r, 150));
-      const text = await grabSelection();
-      if (text) {
-        windows.showPanel(config);
-        windows.sendToPanel('selection:result', text);
-      }
-    });
-  } else {
-    registerIpc(); // IPC 仍需注册，子进程也要能响应面板内按钮
-  }
+  // 鼠标钩子按抓取模式启停：auto=自动抓取；manual=关闭，等用户拖入文本
+  applyGrabMode();
 
   // 开发模式打开 DevTools
   if (cli.dev) {
@@ -403,13 +441,6 @@ app.whenReady().then(() => {
         } else if (cmd === 'prefill' && typeof msg.text === 'string') {
           windows.showPanel(config);
           windows.sendToPanel('selection:result', msg.text);
-        } else if (cmd === 'translate' && typeof msg.text === 'string') {
-          windows.showPanel(config);
-          windows.sendToPanel('selection:result', msg.text);
-          windows.sendToPanel('external:runTask', {
-            kind: 'translate',
-            opts: { text: msg.text, target: msg.target || '英文' }
-          });
         }
         try { fs.unlinkSync(CTRL_FILE); } catch {}
       }

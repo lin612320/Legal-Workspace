@@ -1,6 +1,31 @@
 // AI 接入：基于 OpenAI 兼容接口，提供翻译/关联查找/自由询问
 // 支持流式输出，由配置中的 baseURL/apiKey/model 驱动
 
+// HTTP 请求：优先 Electron net.fetch（Chromium 网络栈）
+// 关键差异：net.fetch 会走 Windows 系统代理并支持企业证书，
+// 而 Node 全局 fetch（undici）忽略系统代理——办公网络/代理环境下会连接失败
+let electronNet = null;
+try { electronNet = require('electron').net; } catch { /* 非 Electron 环境 */ }
+
+async function httpFetch(url, opts) {
+  if (electronNet && typeof electronNet.fetch === 'function') {
+    return electronNet.fetch(url, opts);
+  }
+  return fetch(url, opts);
+}
+
+// 给 fetch 失败套上可读的错误信息（含代理提示）
+async function httpFetchWithHint(url, opts) {
+  try {
+    return await httpFetch(url, opts);
+  } catch (e) {
+    throw new Error(
+      `网络请求失败（${e.message || e}）。` +
+      `如果办公室网络需要代理，请在 Windows「设置 → 网络和 Internet → 代理」配置系统代理后重试。`
+    );
+  }
+}
+
 // 常见平台域名映射：用户容易粘贴控制台网页地址，这里自动修正
 const PLATFORM_FIXES = [
   // DeepSeek: platform.deepseek.com(控制台) → api.deepseek.com/v1
@@ -68,7 +93,7 @@ function endpoint(cfg) {
   return `${base}/chat/completions`;
 }
 
-module.exports = { runTask, streamChat, normalizeBaseURL, normalizeAPIKey, endpoint };
+module.exports = { runTask, streamChat, normalizeBaseURL, normalizeAPIKey, endpoint, httpFetchWithHint };
 
 // 系统提示词
 const PROMPTS = {
@@ -98,7 +123,7 @@ async function streamChat(cfg, messages, onChunk, signal) {
     throw new Error('未配置 AI API Key，请先在小窗设置中填写。');
   }
 
-  const res = await fetch(endpoint(cfg), {
+  const res = await httpFetchWithHint(endpoint(cfg), {
     method: 'POST',
     headers: buildHeaders(cfg),
     signal,

@@ -226,7 +226,32 @@ async function fillSettings() {
   $('cfgModel').value = cfgCache.ai.model || '';
   $('hotkeyText').textContent = cfgCache.hotkey || 'Alt+Q';
   pendingHotkey = cfgCache.hotkey || 'Alt+Q';
+  pendingGrabMode = cfgCache.grabMode === 'manual' ? 'manual' : 'auto';
+  syncGrabButtons();
 }
+
+// 抓取模式切换（选中态强对比 + 说明文字）
+function syncGrabButtons() {
+  const auto = pendingGrabMode !== 'manual';
+  $('grabAuto').classList.toggle('active', auto);
+  $('grabManual').classList.toggle('active', !auto);
+  $('grabHint').textContent = auto
+    ? '🔄 自动模式：鼠标选中文字松开即自动抓取并弹出面板'
+    : '✋ 手动模式：不主动抓取，把选中的文字拖到悬浮球或本窗口内即可';
+}
+// 抓取模式点击立即生效并持久化（与主题切换一致，不依赖“保存”按钮）
+async function applyGrabModeLive(mode) {
+  pendingGrabMode = mode;
+  syncGrabButtons();
+  try {
+    cfgCache = await window.api.saveConfig({ grabMode: mode });
+    setStatus(mode === 'manual' ? '✋ 已切换：手动拖入（自动抓取已关闭）' : '🔄 已切换：自动抓取');
+  } catch (e) {
+    setStatus('模式切换失败：' + (e.message || e));
+  }
+}
+$('grabAuto').addEventListener('click', () => { if (pendingGrabMode !== 'auto') applyGrabModeLive('auto'); });
+$('grabManual').addEventListener('click', () => { if (pendingGrabMode !== 'manual') applyGrabModeLive('manual'); });
 
 // 选择平台自动填充
 $('cfgProvider').addEventListener('change', () => {
@@ -287,6 +312,7 @@ $('btnSave').addEventListener('click', async () => {
   if (apiKey) patch.ai.apiKey = apiKey;
   if (model) patch.ai.model = model;
   if (pendingHotkey) patch.hotkey = pendingHotkey;
+  patch.grabMode = pendingGrabMode;
   cfgCache = await window.api.saveConfig(patch);
   setStatus('设置已保存');
   $('setDrawer').classList.remove('open');
@@ -301,6 +327,33 @@ $('btnTest').addEventListener('click', async () => {
   setStatus('测试中…');
   const r = await window.api.testKey({ baseURL, apiKey });
   setStatus(r.message);
+});
+
+// ---- 文本拖入面板（手动抓取模式：把选中文字拖到窗口里）----
+let dragDepth = 0;
+window.addEventListener('dragenter', (e) => {
+  e.preventDefault();
+  dragDepth++;
+  document.body.classList.add('drop-active');
+});
+window.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+});
+window.addEventListener('dragleave', (e) => {
+  e.preventDefault();
+  dragDepth--;
+  if (dragDepth <= 0) { dragDepth = 0; document.body.classList.remove('drop-active'); }
+});
+window.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dragDepth = 0;
+  document.body.classList.remove('drop-active');
+  const text = (e.dataTransfer && (e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('text'))) || '';
+  if (text.trim()) {
+    $('source').value = text.trim();
+    setStatus('已放入文本');
+  }
 });
 
 // 初始化
