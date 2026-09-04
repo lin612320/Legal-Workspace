@@ -514,6 +514,33 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+            // 内置法库：安装包资源里带 legal_preload.db，首次启动（本地库不存在）时拷贝过去
+            let _ = std::fs::create_dir_all(&dir);
+            let db_path = dir.join("legal.db");
+            if !db_path.exists() {
+                // 兼容多种发布布局：BaseDirectory::Resource、exe 同目录、exe/resources 子目录
+                let mut candidates: Vec<std::path::PathBuf> = Vec::new();
+                if let Ok(p) =
+                    app.path().resolve("legal_preload.db", tauri::path::BaseDirectory::Resource)
+                {
+                    candidates.push(p);
+                }
+                if let Some(exe_dir) = std::env::current_exe()
+                    .ok()
+                    .and_then(|p| p.parent().map(|d| d.to_path_buf()))
+                {
+                    candidates.push(exe_dir.join("legal_preload.db"));
+                    candidates.push(exe_dir.join("resources").join("legal_preload.db"));
+                }
+                let hit = candidates.into_iter().find(|p| p.exists());
+                if let Some(pre) = hit {
+                    if let Err(e) = std::fs::copy(&pre, &db_path) {
+                        eprintln!("[preload] 拷贝内置法库失败（将使用空库并播种示例）: {e}");
+                    } else {
+                        println!("[preload] 已装载内置法库 {}", pre.display());
+                    }
+                }
+            }
             let conn = db::init(&dir)?;
             app.manage(Mutex::new(conn) as DbState);
 

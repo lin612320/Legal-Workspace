@@ -27,3 +27,4 @@ Thumbs.db
 发布包/
 .cdp/
 *.exe
+src-tauri/preload/
