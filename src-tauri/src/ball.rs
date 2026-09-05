@@ -70,14 +70,20 @@ fn main_exe_dir() -> Option<PathBuf> {
 
 /// 在目录树（有限深度）里递归探测悬浮球，
 /// 兼容 NSIS `_up_` 备份目录等嵌套布局（如 `_up_\floating-ball\dist\悬浮球助手*.exe`）
-fn find_ball_recursive(dir: &Path, depth: u32) -> Option<BallSource> {
-    if let Some(src) = probe_dir(dir) {
-        return Some(src);
-    }
-    if depth == 0 {
-        return None;
-    }
-    let mut subdirs: Vec<PathBuf> = fs::read_dir(dir)
+/// 解析 “win-unpacked-<版本>” 目录的版本段（点号/连字符分隔的数字序列）
+fn unpacked_ver(name: &str) -> Vec<u64> {
+    name.strip_prefix("win-unpacked-")
+        .unwrap_or("")
+        .split(['.', '-'])
+        .filter_map(|p| p.parse::<u64>().ok())
+        .collect()
+}
+
+/// 子目录探测顺序：版本化目录（win-unpacked-*）按版本号**从大到小**优先，
+/// 其余目录按名称升序。这样升级安装写入新版本目录后，主程序优先拉起新版悬浮球，
+/// 而不是历史残留的旧目录（旧目录可能正被旧进程占用）。
+fn sorted_subdirs(dir: &Path) -> Vec<PathBuf> {
+    let mut dirs: Vec<PathBuf> = fs::read_dir(dir)
         .map(|entries| {
             entries
                 .filter_map(Result::ok)
@@ -86,8 +92,28 @@ fn find_ball_recursive(dir: &Path, depth: u32) -> Option<BallSource> {
                 .collect()
         })
         .unwrap_or_default();
-    subdirs.sort();
-    for sub in subdirs {
+    dirs.sort_by(|a, b| {
+        let na = a.file_name().and_then(|s| s.to_str()).unwrap_or("");
+        let nb = b.file_name().and_then(|s| s.to_str()).unwrap_or("");
+        let (va, vb) = (unpacked_ver(na), unpacked_ver(nb));
+        match (!va.is_empty(), !vb.is_empty()) {
+            (true, true) => vb.cmp(&va).then_with(|| na.cmp(nb)), // 版本大者优先
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            (false, false) => na.cmp(nb),
+        }
+    });
+    dirs
+}
+
+fn find_ball_recursive(dir: &Path, depth: u32) -> Option<BallSource> {
+    if let Some(src) = probe_dir(dir) {
+        return Some(src);
+    }
+    if depth == 0 {
+        return None;
+    }
+    for sub in sorted_subdirs(dir) {
         let name = sub
             .file_name()
             .and_then(|s| s.to_str())
