@@ -78,13 +78,18 @@ fn chat_history_save(
 
 #[tauri::command]
 fn laws_search(conn: State<'_, DbState>, keyword: String) -> Result<Vec<Value>, String> {
+    let kw = keyword.trim();
+    // 空关键词不返回全量（内置库 15 万条/数百 MB），由前端引导输入关键词
+    if kw.is_empty() {
+        return Ok(vec![]);
+    }
     let c = conn.lock().unwrap();
-    let like = format!("%{keyword}%");
+    let like = format!("%{kw}%");
     let mut stmt = c
         .prepare(
             "SELECT id, title, chapter, article_no, content, source
              FROM laws WHERE title LIKE ?1 OR content LIKE ?1 OR article_no LIKE ?1
-             ORDER BY title",
+             ORDER BY title LIMIT 500",
         )
         .map_err(|e| e.to_string())?;
     let rows = stmt
@@ -101,6 +106,13 @@ fn laws_search(conn: State<'_, DbState>, keyword: String) -> Result<Vec<Value>, 
         .map_err(|e| e.to_string())?;
 
     rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn laws_count(conn: State<'_, DbState>) -> Result<i64, String> {
+    let c = conn.lock().unwrap();
+    c.query_row("SELECT COUNT(*) FROM laws", [], |r| r.get(0))
+        .map_err(|e| e.to_string())
 }
 
 // ---------------------------------------------------------------------------
@@ -633,6 +645,7 @@ pub fn run() {
             chat_history_load,
             chat_history_save,
             laws_search,
+            laws_count,
             templates_list,
             templates_create,
             templates_delete,

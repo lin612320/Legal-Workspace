@@ -1,6 +1,7 @@
-// 法规数据层：桌面环境走 Rust(laws_search,SQLite)，浏览器预览降级到 localStorage 示例数据。
+// 法规数据层：桌面走 Rust（laws_search 按关键词检索 / laws_count 计数），浏览器预览降级到 localStorage 示例。
+// 注意：内置法库达 15 万条，绝不挂载即全量拉取——仅在用户输入关键词后按需检索。
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Law, SAMPLE_LAWS } from "../data/laws";
 import { callRust, isTauri } from "../lib/tauri";
 
@@ -18,18 +19,21 @@ function readLocal(): Law[] {
 }
 
 export function useLaws() {
-  const [laws, setLaws] = useState<Law[]>([]);
+  // 桌面：不预载条文（避免全量 15 万条传输），laws 仅浏览器预览示例用
+  const laws = useMemo<Law[]>(() => (isTauri() ? [] : readLocal()), []);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let alive = true;
     (async () => {
-      // 桌面首次启动时由 Rust 播种示例数据；浏览器用 localStorage 示例
-      const list = isTauri() ? ((await callRust<Law[]>("laws_search", { keyword: "" })) ?? []) : readLocal();
-      if (alive) {
-        setLaws(list);
-        setLoading(false);
+      if (isTauri()) {
+        const n = (await callRust<number>("laws_count")) ?? 0;
+        if (alive) setTotal(n);
+      } else {
+        if (alive) setTotal(readLocal().length);
       }
+      if (alive) setLoading(false);
     })();
     return () => {
       alive = false;
@@ -37,20 +41,23 @@ export function useLaws() {
   }, []);
 
   const search = useCallback(async (keyword: string): Promise<Law[]> => {
+    const k = keyword.trim();
     if (isTauri()) {
-      return (await callRust<Law[]>("laws_search", { keyword: keyword.trim() })) ?? [];
+      // 空关键词：不请求（后端同样不返回全量）
+      if (!k) return [];
+      return (await callRust<Law[]>("laws_search", { keyword: k })) ?? [];
     }
     const all = readLocal();
-    const k = keyword.trim().toLowerCase();
     if (!k) return all;
+    const kk = k.toLowerCase();
     return all.filter(
       (l) =>
-        l.title.toLowerCase().includes(k) ||
-        (l.article_no ?? "").toLowerCase().includes(k) ||
-        (l.chapter ?? "").toLowerCase().includes(k) ||
-        l.content.toLowerCase().includes(k),
+        l.title.toLowerCase().includes(kk) ||
+        (l.article_no ?? "").toLowerCase().includes(kk) ||
+        (l.chapter ?? "").toLowerCase().includes(kk) ||
+        l.content.toLowerCase().includes(kk),
     );
   }, []);
 
-  return { laws, loading, search };
+  return { laws, total, loading, search };
 }
