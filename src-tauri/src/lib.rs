@@ -514,23 +514,68 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
-            // 内置法库：安装包资源里带 legal_preload.db，首次启动（本地库不存在）时拷贝过去
             let _ = std::fs::create_dir_all(&dir);
             let db_path = dir.join("legal.db");
-            if !db_path.exists() {
-                // 兼容多种发布布局：BaseDirectory::Resource、exe 同目录、exe/resources 子目录
+
+            // —— 内置法库装载判定 ——
+            // 1) 本地库不存在：直接装载预置库；
+            // 2) 本地库存在但 laws 仍只有“播种示例”（≤6 条，从未导入过真实数据）：
+            //    视为“空库”，先把旧文件备份为 legal.db.user-<时间戳>.db 再装载预置库，
+            //    覆盖“老版本已生成空库导致升级后仍只有示例”的场景。
+            let mut need_preload = !db_path.exists();
+            if !need_preload {
+                if let Ok(probe) = rusqlite::Connection::open(&db_path) {
+                    let cnt: rusqlite::Result<i64> =
+                        probe.query_row("SELECT COUNT(*) FROM laws", [], |r| r.get(0));
+                    if let Ok(c) = cnt {
+                        if c <= 6 {
+                            need_preload = true;
+                            let now = chrono::Local::now().format("%Y%m%d-%H%M%S");
+                            let bak = dir.join(format!("legal.db.user-{now}.db"));
+                            if let Err(e) = std::fs::copy(&db_path, &bak) {
+                                eprintln!("[preload] 备份旧空库失败: {e}");
+                            }
+                        }
+                    }
+                    drop(probe);
+                }
+            }
+            if need_preload {
+                // 兼容多种发布布局：BaseDirectory::Resource、exe 同目录、exe/resources 子目录，及 exe 侧浅层扫描
                 let mut candidates: Vec<std::path::PathBuf> = Vec::new();
                 if let Ok(p) =
                     app.path().resolve("legal_preload.db", tauri::path::BaseDirectory::Resource)
                 {
                     candidates.push(p);
                 }
-                if let Some(exe_dir) = std::env::current_exe()
+                let exe_dir = std::env::current_exe()
                     .ok()
-                    .and_then(|p| p.parent().map(|d| d.to_path_buf()))
-                {
+                    .and_then(|p| p.parent().map(|d| d.to_path_buf()));
+                if let Some(exe_dir) = &exe_dir {
                     candidates.push(exe_dir.join("legal_preload.db"));
                     candidates.push(exe_dir.join("resources").join("legal_preload.db"));
+                    // 浅层扫描（≤3 层），兼容安装器把资源放到更内层目录的情况
+                    let mut stack: Vec<std::path::PathBuf> = vec![exe_dir.clone()];
+                    for _ in 0..3 {
+                        let mut next: Vec<std::path::PathBuf> = Vec::new();
+                        for d in stack.drain(..) {
+                            if let Ok(rd) = std::fs::read_dir(&d) {
+                                for en in rd.filter_map(Result::ok) {
+                                    let p = en.path();
+                                    let n = en.file_name().to_string_lossy().to_string();
+                                    if n == "node_modules" || n == "target" {
+                                        continue;
+                                    }
+                                    if en.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                                        next.push(p);
+                                    } else if n == "legal_preload.db" {
+                                        candidates.push(p);
+                                    }
+                                }
+                            }
+                        }
+                        stack = next;
+                    }
                 }
                 let hit = candidates.into_iter().find(|p| p.exists());
                 if let Some(pre) = hit {
@@ -539,6 +584,8 @@ pub fn run() {
                     } else {
                         println!("[preload] 已装载内置法库 {}", pre.display());
                     }
+                } else {
+                    eprintln!("[preload] 未找到预置库 legal_preload.db（本机装的是无内置法库的旧安装包？）");
                 }
             }
             let conn = db::init(&dir)?;
