@@ -76,8 +76,33 @@ fn chat_history_save(
 // 版块 2：法规查询
 // ---------------------------------------------------------------------------
 
+/// 国家判定（按标题/来源特征推导；当前内置库均由 ETL 导入，命名与来源稳定）
+/// 中国：标题以“中华人民共和国”开头（内置示例）；美国：美国法典/美利坚标题或 govinfo/constitutioncenter 来源；
+/// 日本：来源 elaws.e-gov.go.jp；其余归为“其他”。
+fn country_sql() -> &'static str {
+    "CASE
+       WHEN title LIKE '美国法典%' OR title LIKE '美利坚合众国宪法%'
+            OR source LIKE '%constitutioncenter%' OR source LIKE '%govinfo%' THEN '美国'
+       WHEN title LIKE '中华人民共和国%' THEN '中国'
+       WHEN source LIKE '%e-gov.go.jp%' THEN '日本'
+       ELSE '其他' END"
+}
+
+fn country_where(country: &Option<String>, alias: &str) -> String {
+    match country.as_deref().map(|s| s.trim()) {
+        Some(c) if !c.is_empty() && c != "全部" => {
+            format!("AND {alias} = ?2")
+        }
+        _ => String::new(),
+    }
+}
+
 #[tauri::command]
-fn laws_search(conn: State<'_, DbState>, keyword: String) -> Result<Vec<Value>, String> {
+fn laws_search(
+    conn: State<'_, DbState>,
+    keyword: String,
+    country: Option<String>,
+) -> Result<Vec<Value>, String> {
     let kw = keyword.trim();
     // 空关键词不返回全量（内置库 15 万条/数百 MB），由前端引导输入关键词
     if kw.is_empty() {
@@ -85,27 +110,39 @@ fn laws_search(conn: State<'_, DbState>, keyword: String) -> Result<Vec<Value>, 
     }
     let c = conn.lock().unwrap();
     let like = format!("%{kw}%");
-    let mut stmt = c
-        .prepare(
-            "SELECT id, title, chapter, article_no, content, source
-             FROM laws WHERE title LIKE ?1 OR content LIKE ?1 OR article_no LIKE ?1
-             ORDER BY title LIMIT 500",
-        )
-        .map_err(|e| e.to_string())?;
-    let rows = stmt
-        .query_map([&like], |r| {
-            Ok(json!({
-                "id": r.get::<_, i64>(0)?,
-                "title": r.get::<_, String>(1)?,
-                "chapter": r.get::<_, Option<String>>(2)?,
-                "article_no": r.get::<_, Option<String>>(3)?,
-                "content": r.get::<_, String>(4)?,
-                "source": r.get::<_, Option<String>>(5)?,
-            }))
-        })
-        .map_err(|e| e.to_string())?;
-
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+    let country_cond = country_where(&country, "laws_country");
+    // 内联 country 判定为子查询列，避免外层别名复杂化
+    let mut sql = format!(
+        "SELECT id, title, chapter, article_no, content, source FROM (
+           SELECT id, title, chapter, article_no, content, source, {} AS laws_country FROM laws
+         ) WHERE (title LIKE ?1 OR content LIKE ?1 OR article_no LIKE ?1) ",
+        country_sql()
+    );
+    sql.push_str(&country_cond);
+    sql.push_str(" ORDER BY title LIMIT 500");
+    let mut stmt = c.prepare(&sql).map_err(|e| e.to_string())?;
+    let mapper = |r: &rusqlite::Row| {
+        Ok(json!({
+            "id": r.get::<_, i64>(0)?,
+            "title": r.get::<_, String>(1)?,
+            "chapter": r.get::<_, Option<String>>(2)?,
+            "article_no": r.get::<_, Option<String>>(3)?,
+            "content": r.get::<_, String>(4)?,
+            "source": r.get::<_, Option<String>>(5)?,
+        }))
+    };
+    let out: Vec<Value> = if country_cond.is_empty() {
+        stmt.query_map([&like], mapper)
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?
+    } else {
+        stmt.query_map(rusqlite::params![&like, country.as_deref().unwrap_or("")], mapper)
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?
+    };
+    Ok(out)
 }
 
 #[tauri::command]
@@ -113,6 +150,63 @@ fn laws_count(conn: State<'_, DbState>) -> Result<i64, String> {
     let c = conn.lock().unwrap();
     c.query_row("SELECT COUNT(*) FROM laws", [], |r| r.get(0))
         .map_err(|e| e.to_string())
+}
+
+/// 国家选项（含条数），用于下拉框展示
+#[tauri::command]
+fn laws_countries(conn: State<'_, DbState>) -> Result<Vec<Value>, String> {
+    let c = conn.lock().unwrap();
+    let sql = format!("SELECT {}, COUNT(*) AS rows FROM laws GROUP BY 1 ORDER BY 1", country_sql());
+    let mut stmt = c.prepare(&sql).map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |r| {
+            Ok(json!({
+                "country": r.get::<_, String>(0)?,
+                "rows": r.get::<_, i64>(1)?,
+            }))
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+/// 某国家下按条文数排序的重点法规预览（前 8 部，标题 + 条文数）
+#[tauri::command]
+fn laws_country_preview(
+    conn: State<'_, DbState>,
+    country: Option<String>,
+) -> Result<Vec<Value>, String> {
+    let c = conn.lock().unwrap();
+    let cond = country_where(&country, "laws_country");
+    let where_part = if cond.is_empty() {
+        String::new()
+    } else {
+        "WHERE laws_country = ?1".to_string()
+    };
+    let sql = format!(
+        "SELECT title, COUNT(*) AS n FROM (
+           SELECT title, {} AS laws_country FROM laws
+         ) {}
+         GROUP BY title ORDER BY n DESC, title LIMIT 8",
+        country_sql(),
+        where_part
+    );
+    let mut stmt = c.prepare(&sql).map_err(|e| e.to_string())?;
+    let mapper = |r: &rusqlite::Row| {
+        Ok(json!({ "title": r.get::<_, String>(0)?, "articles": r.get::<_, i64>(1)? }))
+    };
+    let out: Vec<Value> = if where_part.is_empty() {
+        stmt.query_map([], mapper)
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?
+    } else {
+        let cv = country.as_deref().unwrap_or("");
+        stmt.query_map(rusqlite::params![cv], mapper)
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?
+    };
+    Ok(out)
 }
 
 // ---------------------------------------------------------------------------
@@ -646,6 +740,8 @@ pub fn run() {
             chat_history_save,
             laws_search,
             laws_count,
+            laws_countries,
+            laws_country_preview,
             templates_list,
             templates_create,
             templates_delete,

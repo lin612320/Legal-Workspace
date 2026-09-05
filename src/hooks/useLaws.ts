@@ -40,24 +40,28 @@ export function useLaws() {
     };
   }, []);
 
-  const search = useCallback(async (keyword: string): Promise<Law[]> => {
-    const k = keyword.trim();
-    if (isTauri()) {
-      // 空关键词：不请求（后端同样不返回全量）
-      if (!k) return [];
-      return (await callRust<Law[]>("laws_search", { keyword: k })) ?? [];
-    }
-    const all = readLocal();
-    if (!k) return all;
-    const kk = k.toLowerCase();
-    return all.filter(
-      (l) =>
-        l.title.toLowerCase().includes(kk) ||
-        (l.article_no ?? "").toLowerCase().includes(kk) ||
-        (l.chapter ?? "").toLowerCase().includes(kk) ||
-        l.content.toLowerCase().includes(kk),
-    );
-  }, []);
+  const search = useCallback(
+    async (keyword: string, country?: string): Promise<Law[]> => {
+      const k = keyword.trim();
+      if (isTauri()) {
+        // 空关键词：不请求（后端同样不返回全量）
+        if (!k) return [];
+        const c = country && country !== "全部国家" ? country : undefined;
+        return (await callRust<Law[]>("laws_search", { keyword: k, country: c })) ?? [];
+      }
+      const all = readLocal();
+      if (!k) return all;
+      const kk = k.toLowerCase();
+      return all.filter(
+        (l) =>
+          l.title.toLowerCase().includes(kk) ||
+          (l.article_no ?? "").toLowerCase().includes(kk) ||
+          (l.chapter ?? "").toLowerCase().includes(kk) ||
+          l.content.toLowerCase().includes(kk),
+      );
+    },
+    [],
+  );
 
   return { laws, total, loading, search };
 }
