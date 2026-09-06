@@ -342,6 +342,22 @@ function registerIpc() {
       return { ok: false, error: String(e.message || e) };
     }
   });
+
+  // “关联查找法规”：请求主程序在本地 15 万条法库检索，结果经 from-workbench.json 回传
+  ipcMain.handle('laws:ask', (_evt, { text }) => {
+    try {
+      if (!fs.existsSync(BRIDGE_DIR)) fs.mkdirSync(BRIDGE_DIR, { recursive: true });
+      fs.writeFileSync(
+        BRIDGE_FILE,
+        JSON.stringify({ ts: Date.now(), text: text || '', action: 'laws_search' }, null, 2),
+        'utf8'
+      );
+      spawnWorkbenchIfNeeded();
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: String(e.message || e) };
+    }
+  });
 }
 
 // 拉起律政工作台：直接运行打包好的 exe（不再 spawn 源码/dev 服务器）
@@ -441,6 +457,10 @@ app.whenReady().then(() => {
         } else if (cmd === 'prefill' && typeof msg.text === 'string') {
           windows.showPanel(config);
           windows.sendToPanel('selection:result', msg.text);
+        } else if (cmd === 'laws_result' && msg) {
+          // 主程序回传的本地法条检索结果
+          windows.showPanel(config);
+          windows.sendToPanel('laws:result', msg);
         }
         try { fs.unlinkSync(CTRL_FILE); } catch {}
       }

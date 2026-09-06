@@ -110,6 +110,43 @@ window.api.onSelectionResult((text) => {
 });
 window.api.onApplyTheme((theme) => applyTheme(theme));
 
+// ---- 关联查找法规（走主程序本地法库，经桥接文件往返） ----
+let lawsTimer = null;
+function showRelatePlaceholder(text) {
+  buffer = `> 关联查找法规 🗄（本地法库）\n\n已选中文本：\`${text.slice(0, 60)}${text.length > 60 ? '…' : ''}\`\n\n正在通过主程序「律衡」检索本地法条库…`;
+  renderResult(true);
+  setStatus('法库检索中…');
+  window.api.askLawsSearch(text);
+  if (lawsTimer) clearTimeout(lawsTimer);
+  lawsTimer = setTimeout(() => {
+    buffer += '\n\n> ⚠ 未收到主程序响应：请确认「律衡」桌面版已启动后重试（浏览器预览模式不提供本地法库）。';
+    renderResult(false);
+    setStatus('未连接主程序');
+  }, 6000);
+}
+window.api.onLawsResult((msg) => {
+  if (lawsTimer) { clearTimeout(lawsTimer); lawsTimer = null; }
+  const list = (msg && Array.isArray(msg.results)) ? msg.results : [];
+  const kw = (msg && msg.kw) || '';
+  if (list.length === 0) {
+    buffer =
+      `> 关联查找法规 · 未命中\n\n主程序本地法库未找到与「${kw}」相关的条文` +
+      (msg && msg.note ? `\n\n（${msg.note}）` : '') +
+      '。可到主程序「法规查询」换关键词再试。';
+  } else {
+    const lines = list.map((r, i) => {
+      const t = r.title || '未知法规';
+      const a = r.article_no ? ` ${r.article_no}` : '';
+      const src = r.source ? `（来源：${r.source}）` : '';
+      const sn = (r.snippet || '').slice(0, 160);
+      return `### ${i + 1}. ${t}${a}${src}\n\n${sn}`;
+    });
+    buffer = `> 关联查找法规 · 本地库命中 ${list.length} 条\n\n${lines.join('\n\n')}`;
+  }
+  renderResult(false);
+  setStatus(list.length ? `命中 ${list.length} 条` : '未命中');
+});
+
 window.api.onExternalRunTask(({ kind, opts }) => {
   const text = opts.text || opts.question || '';
   if (text) $('source').value = text;
@@ -130,12 +167,6 @@ $('btnRelate').addEventListener('click', () => {
   if (!text) { setStatus('请先输入/抓取文本'); return; }
   showRelatePlaceholder(text);
 });
-
-function showRelatePlaceholder(text) {
-  buffer = `> 关联查找 🗄（功能预留中）\n\n已选中文本：\`${text.slice(0, 60)}${text.length > 60 ? '…' : ''}\`\n\n关联查找后续将接入本地/远端数据库，支持：\n- 向量检索相似概念\n- 历史查找记录\n- 知识库关联推荐\n\n当前先用 AI 模拟一个关联结果：`;
-  renderResult(true);
-  startTask('relate', { text });
-}
 
 $('btnAsk').addEventListener('click', () => {
   const sourceText = $('source').value.trim();
@@ -179,7 +210,7 @@ $('btnTheme').addEventListener('click', () => toggleTheme());
 $('btnWorkbench').addEventListener('click', async () => {
   const text = $('source').value.trim() || '';
   const res = await window.api.pushToWorkbench(text, 'prefill');
-  if (res?.ok) setStatus(text ? '已推送到律政工作台' : '已拉起律政工作台');
+  if (res?.ok) setStatus(text ? '已推送到律衡' : '已拉起律衡');
   else setStatus('操作失败：' + (res?.error || '未知错误'));
 });
 $('btnSettings').addEventListener('click', async () => {

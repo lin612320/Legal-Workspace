@@ -17,7 +17,9 @@ use std::os::windows::process::CommandExt;
 const CREATE_BREAKAWAY_FROM_JOB: u32 = 0x01000000;
 
 use serde::Deserialize;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
+
+use crate::db::DbState;
 
 /// 悬浮球查找结果
 enum BallSource {
@@ -397,6 +399,13 @@ pub fn start_bridge_poller(app: AppHandle) {
         st.last_ts = msg.ts;
         drop(st);
 
+        // 悬浮球“关联查找法规”：不当作普通文本推送，直接检索本地法库并回写结果
+        if msg.action == "laws_search" {
+            let _ = reply_laws_search(&app, &msg.text);
+            let _ = fs::remove_file(&poll_file);
+            continue;
+        }
+
         // 发给前端（Tauri event）
         let _ = app.emit(
             "ball-push",
@@ -410,4 +419,94 @@ pub fn start_bridge_poller(app: AppHandle) {
         // 处理后删除文件（floating-ball 下次会重新写）
         let _ = fs::remove_file(&poll_file);
     });
+}
+
+// ---------------------------------------------------------------------------
+// 悬浮球“关联查找法规”：检索本地法库并把命中回写给悬浮球
+// ---------------------------------------------------------------------------
+
+/// 从一段选中文本里抽出适合 LIKE 检索的关键词（最长的连续字母/数字/中日韩片段）
+fn pick_keyword(text: &str) -> String {
+    let mut best = String::new();
+    let mut cur = String::new();
+    for ch in text.chars() {
+        if ch.is_alphanumeric() {
+            cur.push(ch);
+            if cur.chars().count() > best.chars().count() {
+                best = cur.clone();
+            }
+        } else {
+            cur.clear();
+        }
+    }
+    if best.is_empty() {
+        best = text.chars().take(24).collect();
+    }
+    best.chars().take(32).collect()
+}
+
+/// 主程序收到 laws_search 请求：LIKE 检索本地法库（前 8 条摘要），
+/// 结果写回 %APPDATA%\floating-ball\from-workbench.json（cmd=laws_result），由悬浮球轮询取走。
+fn reply_laws_search(app: &AppHandle, text: &str) -> Result<(), String> {
+    let kw = pick_keyword(text);
+
+    let outcome: Result<Vec<serde_json::Value>, String> = {
+        let state = app.state::<DbState>();
+        let conn = state.lock().unwrap();
+        let like = format!("%{kw}%");
+        let sql = "SELECT title, article_no, content, source FROM laws \
+                   WHERE title LIKE ?1 OR content LIKE ?1 OR article_no LIKE ?1 \
+                   ORDER BY title LIMIT 8";
+        let mut stmt = conn
+            .prepare(sql)
+            .map_err(|e| format!("laws 表不可用：{e}"))?;
+        let rows = stmt
+            .query_map(rusqlite::params![&like], |r| {
+                let content: String = r.get(2)?;
+                Ok(serde_json::json!({
+                    "title": r.get::<_, String>(0)?,
+                    "article_no": r.get::<_, Option<String>>(1)?,
+                    "snippet": content.chars().take(160).collect::<String>(),
+                    "source": r.get::<_, Option<String>>(3)?,
+                }))
+            })
+            .map_err(|e| format!("检索执行失败：{e}"))?;
+        let mut out: Vec<serde_json::Value> = Vec::new();
+        for row in rows {
+            match row {
+                Ok(v) => out.push(v),
+                Err(e) => eprintln!("[ball] laws 行解析失败: {e}"),
+            }
+        }
+        Ok(out)
+    };
+
+    let (results, note) = match outcome {
+        Ok(list) => {
+            if list.is_empty() {
+                eprintln!("[ball] laws_search “{kw}” 无命中");
+                (list, Some(format!("本地法库未命中“{kw}”（选中文本可能不是法条关键词）")))
+            } else {
+                (list, None)
+            }
+        }
+        Err(e) => {
+            eprintln!("[ball] laws_search 失败: {e}");
+            (vec![], Some(e))
+        }
+    };
+
+    let payload = serde_json::json!({
+        "ts": now_ms(),
+        "cmd": "laws_result",
+        "kw": kw,
+        "results": results,
+        "note": note,
+    });
+    let dir = ctrl_file()
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| PathBuf::from("."));
+    fs::create_dir_all(&dir).map_err(|e| format!("创建悬浮球控制目录失败：{e}"))?;
+    fs::write(ctrl_file(), payload.to_string()).map_err(|e| format!("写入检索结果失败：{e}"))
 }
