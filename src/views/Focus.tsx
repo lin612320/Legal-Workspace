@@ -66,7 +66,7 @@ export default function Focus() {
     doneRef.current = true;
     setRunning(false);
     if (mode === "focus") {
-      notify("律政工作台 · 专注完成", "一个番茄结束，休息一下吧 🍅");
+      notify("律衡 · 专注完成", "一个番茄结束，休息一下吧 🍅");
       setPomos((p) => {
         const n = p + 1;
         try {
@@ -78,7 +78,7 @@ export default function Focus() {
       });
       switchMode("short");
     } else {
-      notify("律政工作台 · 休息结束", "开始新一轮专注，继续加油。");
+      notify("律衡 · 休息结束", "开始新一轮专注，继续加油。");
       switchMode("focus");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

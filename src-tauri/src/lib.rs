@@ -956,7 +956,7 @@ fn check_todo_notifications(app: &AppHandle) {
         let _ = app
             .notification()
             .builder()
-            .title("律政工作台 · 待办提醒")
+            .title("律衡 · 待办提醒")
             .body(format!("「{title}」已到期或即将到期，请及时处理。"))
             .show();
     }

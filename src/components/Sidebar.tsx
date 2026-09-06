@@ -10,7 +10,7 @@ export default function Sidebar() {
     <aside className="sidebar">
       <div className="brand">
         <span className="brand-mark">律</span>
-        <span className="brand-name">律政工作台</span>
+        <span className="brand-name">律衡</span>
       </div>
       <nav className="nav">
         {NAV_ITEMS.map((item) => (
