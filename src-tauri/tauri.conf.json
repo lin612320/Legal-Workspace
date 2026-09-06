@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "律政工作台",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "identifier": "com.legalworkbench.app",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -22,7 +22,7 @@
       },
       {
         "label": "float",
-        "title": "AI 助手 · 悬浮",
+        "title": "AI 问答 · 悬浮",
         "url": "index.html#/assistant?float=1",
         "width": 380,
         "height": 500,
@@ -47,7 +47,7 @@
       "icons/128x128@2x.png"
     ],
     "resources": {
-      "../floating-ball/dist/win-unpacked": "win-unpacked-0.3.2",
+      "../floating-ball/dist/win-unpacked": "win-unpacked-0.4.0",
       "preload/legal_preload.db": "legal_preload.db"
     }
   }

@@ -2,6 +2,8 @@
 
 mod ball;
 mod db;
+mod docx;
+mod keycrypt;
 
 use std::fs;
 use std::sync::Mutex;
@@ -24,14 +26,53 @@ fn ping() -> String {
 // 设置（AI / 翻译 API、备份配置、偏好）
 // ---------------------------------------------------------------------------
 
+/// 需要加密落盘的设置键（API Key 类）
+const SECRET_KEYS: [&str; 2] = ["ai.api_key", "translate.api_key"];
+
+fn is_secret_key(key: &str) -> bool {
+    SECRET_KEYS.contains(&key)
+}
+
 #[tauri::command]
 fn settings_get(conn: State<'_, DbState>, key: String) -> Result<Option<String>, String> {
-    db::get_setting(&conn.lock().unwrap(), &key)
+    let c = conn.lock().unwrap();
+    let raw = db::get_setting(&c, &key)?;
+    Ok(raw.map(|v| {
+        if is_secret_key(&key) {
+            keycrypt::decrypt(&v)
+        } else {
+            v
+        }
+    }))
 }
 
 #[tauri::command]
 fn settings_set(conn: State<'_, DbState>, key: String, value: String) -> Result<(), String> {
-    db::set_setting(&conn.lock().unwrap(), &key, &value)
+    let c = conn.lock().unwrap();
+    let stored = if is_secret_key(&key) {
+        keycrypt::encrypt(&value)
+    } else {
+        value
+    };
+    db::set_setting(&c, &key, &stored)
+}
+
+/// 启动迁移：把历史明文 API Key 加密落盘（幂等）
+fn migrate_secret_keys(conn: &rusqlite::Connection) {
+    let Ok(rows) = db::settings_all(conn) else {
+        return;
+    };
+    let mut changed = 0usize;
+    for (key, value) in rows {
+        if is_secret_key(&key) && !keycrypt::is_encrypted(&value) && !value.is_empty() {
+            if db::set_setting(conn, &key, &keycrypt::encrypt(&value)).is_ok() {
+                changed += 1;
+            }
+        }
+    }
+    if changed > 0 {
+        println!("[keycrypt] 已将 {changed} 个明文 API Key 迁移为加密存储");
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -109,16 +150,79 @@ fn laws_search(
         return Ok(vec![]);
     }
     let c = conn.lock().unwrap();
-    let like = format!("%{kw}%");
     let country_cond = country_where(&country, "laws_country");
-    // 内联 country 判定为子查询列，避免外层别名复杂化
+
+    // FTS5 优先（关键词 ≥3 个字符），任何异常静默回退 LIKE
+    if kw.chars().count() >= 3 && db::fts_ready(&c) {
+        if let Ok(out) = fts_run(&c, kw, country.as_deref(), &country_cond) {
+            return Ok(out);
+        }
+    }
+    like_run(&c, kw, country.as_deref(), &country_cond)
+}
+
+/// FTS5 检索路径：先取命中 rowid（按相关度），再回表取整行并套用国家筛选
+fn fts_run(
+    c: &rusqlite::Connection,
+    kw: &str,
+    country: Option<&str>,
+    country_cond: &str,
+) -> Result<Vec<Value>, String> {
+    let cond_part = if country_cond.is_empty() {
+        String::new()
+    } else {
+        "WHERE laws_country = ?2".to_string()
+    };
+    let sql = format!(
+        "SELECT * FROM (
+           SELECT l.id, l.title, l.chapter, l.article_no, l.content, l.source, {} AS laws_country
+           FROM (SELECT rowid AS rid FROM laws_fts WHERE laws_fts MATCH ?1 ORDER BY rank LIMIT 300) f
+           JOIN laws l ON l.id = f.rid
+         ) {} LIMIT 500",
+        country_sql(),
+        cond_part
+    );
+    let mut stmt = c.prepare(&sql).map_err(|e| e.to_string())?;
+    let mapper = |r: &rusqlite::Row| {
+        Ok(json!({
+            "id": r.get::<_, i64>(0)?,
+            "title": r.get::<_, String>(1)?,
+            "chapter": r.get::<_, Option<String>>(2)?,
+            "article_no": r.get::<_, Option<String>>(3)?,
+            "content": r.get::<_, String>(4)?,
+            "source": r.get::<_, Option<String>>(5)?,
+        }))
+    };
+    let out: Vec<Value> = if country_cond.is_empty() {
+        stmt.query_map(rusqlite::params![db::fts_phrase(kw)], mapper)
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?
+    } else {
+        let cv = country.unwrap_or("");
+        stmt.query_map(rusqlite::params![db::fts_phrase(kw), cv], mapper)
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?
+    };
+    Ok(out)
+}
+
+/// LIKE 回退路径（FTS 不可用或查询报错时使用）
+fn like_run(
+    c: &rusqlite::Connection,
+    kw: &str,
+    country: Option<&str>,
+    country_cond: &str,
+) -> Result<Vec<Value>, String> {
+    let like = format!("%{kw}%");
     let mut sql = format!(
         "SELECT id, title, chapter, article_no, content, source FROM (
            SELECT id, title, chapter, article_no, content, source, {} AS laws_country FROM laws
          ) WHERE (title LIKE ?1 OR content LIKE ?1 OR article_no LIKE ?1) ",
         country_sql()
     );
-    sql.push_str(&country_cond);
+    sql.push_str(country_cond);
     sql.push_str(" ORDER BY title LIMIT 500");
     let mut stmt = c.prepare(&sql).map_err(|e| e.to_string())?;
     let mapper = |r: &rusqlite::Row| {
@@ -137,7 +241,8 @@ fn laws_search(
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| e.to_string())?
     } else {
-        stmt.query_map(rusqlite::params![&like, country.as_deref().unwrap_or("")], mapper)
+        let cv = country.unwrap_or("");
+        stmt.query_map(rusqlite::params![&like, cv], mapper)
             .map_err(|e| e.to_string())?
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| e.to_string())?
@@ -546,6 +651,253 @@ fn import_excel(conn: State<'_, DbState>, kind: String, path: String) -> Result<
 }
 
 // ---------------------------------------------------------------------------
+// 版块 1：最近文书 + 智能体交付物（documents / docx 导出）
+// ---------------------------------------------------------------------------
+
+#[tauri::command]
+fn law_by_id(conn: State<'_, DbState>, id: i64) -> Result<Option<Value>, String> {
+    let c = conn.lock().unwrap();
+    let mut stmt = c
+        .prepare("SELECT id, title, chapter, article_no, content, source FROM laws WHERE id = ?1")
+        .map_err(|e| e.to_string())?;
+    let mut rows = stmt
+        .query_map([id], |r| {
+            Ok(json!({
+                "id": r.get::<_, i64>(0)?,
+                "title": r.get::<_, String>(1)?,
+                "chapter": r.get::<_, Option<String>>(2)?,
+                "article_no": r.get::<_, Option<String>>(3)?,
+                "content": r.get::<_, String>(4)?,
+                "source": r.get::<_, Option<String>>(5)?,
+            }))
+        })
+        .map_err(|e| e.to_string())?;
+    match rows.next() {
+        Some(Ok(v)) => Ok(Some(v)),
+        Some(Err(e)) => Err(e.to_string()),
+        None => Ok(None),
+    }
+}
+
+#[tauri::command]
+fn documents_list(conn: State<'_, DbState>) -> Result<Vec<Value>, String> {
+    db::documents_list(&conn.lock().unwrap())
+}
+
+#[tauri::command]
+fn document_save(
+    conn: State<'_, DbState>,
+    title: String,
+    content: Option<String>,
+    file_path: Option<String>,
+    kind: Option<String>,
+    meta: Option<String>,
+) -> Result<i64, String> {
+    db::document_save(
+        &conn.lock().unwrap(),
+        &title,
+        content.as_deref(),
+        file_path.as_deref(),
+        kind.as_deref().unwrap_or("doc"),
+        meta.as_deref(),
+    )
+}
+
+#[tauri::command]
+fn document_delete(conn: State<'_, DbState>, id: i64) -> Result<(), String> {
+    db::document_delete(&conn.lock().unwrap(), id)
+}
+
+/// 把 Markdown 交付物导出为 .docx；默认输出到 应用数据目录/artifacts
+#[tauri::command]
+fn docx_export(
+    app: AppHandle,
+    title: String,
+    markdown: String,
+    dir: Option<String>,
+) -> Result<Value, String> {
+    let out_dir = match dir {
+        Some(d) if !d.trim().is_empty() => std::path::PathBuf::from(d.trim()),
+        _ => {
+            let base = app
+                .path()
+                .app_data_dir()
+                .map_err(|e| format!("定位数据目录失败：{e}"))?;
+            base.join("artifacts")
+        }
+    };
+    std::fs::create_dir_all(&out_dir).map_err(|e| format!("创建导出目录失败：{e}"))?;
+    let path = docx::export_docx(&out_dir, &title, &markdown)?;
+    Ok(json!({
+        "path": path.to_string_lossy().into_owned(),
+        "dir": out_dir.to_string_lossy().into_owned(),
+    }))
+}
+
+/// 用系统默认程序打开文件（白名单扩展名；零依赖：调用 Windows explorer 关联打开）
+#[tauri::command]
+fn open_file(path: String) -> Result<(), String> {
+    let p = std::path::Path::new(&path);
+    if !p.exists() {
+        return Err("文件不存在".into());
+    }
+    if !p.is_file() {
+        return Err("不是文件".into());
+    }
+    let ext = p
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|s| s.to_lowercase())
+        .unwrap_or_default();
+    const OK_EXT: [&str; 10] = ["docx", "doc", "md", "txt", "xlsx", "xls", "pdf", "html", "htm", "csv"];
+    if !OK_EXT.contains(&ext.as_str()) {
+        return Err(format!("出于安全考虑不支持打开 .{ext} 类型"));
+    }
+    #[cfg(windows)]
+    {
+        std::process::Command::new("cmd")
+            .args(["/C", "start", "", &path])
+            .spawn()
+            .map_err(|e| format!("打开失败：{e}"))?;
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (p, ext);
+        Err("当前平台暂不支持".into())
+    }
+}
+
+/// 在资源管理器中定位文件（零依赖：explorer /select）
+#[tauri::command]
+fn reveal_in_folder(path: String) -> Result<(), String> {
+    let p = std::path::Path::new(&path);
+    if !p.exists() {
+        return Err("路径不存在".into());
+    }
+    #[cfg(windows)]
+    {
+        std::process::Command::new("explorer")
+            .arg(format!("/select,{}", path))
+            .spawn()
+            .map_err(|e| format!("打开所在目录失败：{e}"))?;
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = p;
+        Err("当前平台暂不支持".into())
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 智能体：任务（tasks / task_steps / task_artifacts）+ 记忆（mem_vectors）
+// ---------------------------------------------------------------------------
+
+#[tauri::command]
+fn task_create(
+    conn: State<'_, DbState>,
+    kind: Option<String>,
+    title: String,
+    context: Option<String>,
+    plan_json: Option<String>,
+) -> Result<i64, String> {
+    db::task_create(
+        &conn.lock().unwrap(),
+        kind.as_deref().unwrap_or("agent"),
+        &title,
+        context.as_deref(),
+        plan_json.as_deref(),
+    )
+}
+
+#[tauri::command]
+fn task_list(conn: State<'_, DbState>) -> Result<Vec<Value>, String> {
+    db::task_list(&conn.lock().unwrap())
+}
+
+#[tauri::command]
+fn task_get(conn: State<'_, DbState>, id: i64) -> Result<Option<Value>, String> {
+    db::task_get(&conn.lock().unwrap(), id)
+}
+
+#[tauri::command]
+fn task_set_status(conn: State<'_, DbState>, id: i64, status: String) -> Result<(), String> {
+    db::task_set_status(&conn.lock().unwrap(), id, &status)
+}
+
+#[tauri::command]
+fn task_delete(conn: State<'_, DbState>, id: i64) -> Result<(), String> {
+    db::task_delete(&conn.lock().unwrap(), id)
+}
+
+/// 全量替换某任务的步骤（计划卡确认后写入），返回新步骤 id 列表
+#[tauri::command]
+fn task_steps_save(
+    conn: State<'_, DbState>,
+    task_id: i64,
+    steps: Vec<Value>,
+) -> Result<Vec<i64>, String> {
+    db::task_steps_save(&conn.lock().unwrap(), task_id, &steps)
+}
+
+#[tauri::command]
+fn task_step_update(
+    conn: State<'_, DbState>,
+    step_id: i64,
+    status: String,
+    result_ref: Option<String>,
+) -> Result<(), String> {
+    db::task_step_update(&conn.lock().unwrap(), step_id, &status, result_ref.as_deref())
+}
+
+#[tauri::command]
+fn task_artifact_add(
+    conn: State<'_, DbState>,
+    task_id: i64,
+    kind: String,
+    file_path: Option<String>,
+    title: Option<String>,
+    content: Option<String>,
+    meta_json: Option<String>,
+) -> Result<i64, String> {
+    db::task_artifact_add(
+        &conn.lock().unwrap(),
+        task_id,
+        &kind,
+        file_path.as_deref(),
+        title.as_deref(),
+        content.as_deref(),
+        meta_json.as_deref(),
+    )
+}
+
+/// 保存一条记忆（embedding 由前端计算后回存）
+#[tauri::command]
+fn mem_save(
+    conn: State<'_, DbState>,
+    kind: Option<String>,
+    ref_id: Option<i64>,
+    title: String,
+    content: String,
+    vector_json: String,
+) -> Result<i64, String> {
+    db::mem_save(
+        &conn.lock().unwrap(),
+        kind.as_deref().unwrap_or("task"),
+        ref_id,
+        &title,
+        &content,
+        &vector_json,
+    )
+}
+
+#[tauri::command]
+fn mem_list(conn: State<'_, DbState>, kind: Option<String>) -> Result<Vec<Value>, String> {
+    db::mem_list(&conn.lock().unwrap(), kind.as_deref())
+}
+
+// ---------------------------------------------------------------------------
 // 后台提醒：轮询待办，到期的发系统通知（每 30 秒一次）
 // ---------------------------------------------------------------------------
 
@@ -695,10 +1047,14 @@ pub fn run() {
                 }
             }
             let conn = db::init(&dir)?;
+            // 历史明文 API Key → 加密存储（幂等迁移）
+            migrate_secret_keys(&conn);
             app.manage(Mutex::new(conn) as DbState);
 
-            // 自动拉起 Electron 悬浮球（子进程模式）
-            let _ = ball::ball_start();
+            // 自动拉起 Electron 悬浮球（子进程模式）；失败不再静默
+            if let Err(e) = ball::ball_start() {
+                eprintln!("[ball] 自动拉起悬浮球失败：{e}");
+            }
             // 启动 floating-ball → 律政 桥接轮询
             ball::start_bridge_poller(app.handle().clone());
 
@@ -755,6 +1111,25 @@ pub fn run() {
             float_in,
             float_out,
             import_excel,
+            // 智能体（数字员工）：文书交付物与任务状态机
+            law_by_id,
+            documents_list,
+            document_save,
+            document_delete,
+            docx_export,
+            task_create,
+            task_list,
+            task_get,
+            task_set_status,
+            task_delete,
+            task_steps_save,
+            task_step_update,
+            task_artifact_add,
+            mem_save,
+            mem_list,
+            // 交付物打开/定位（桌面）
+            open_file,
+            reveal_in_folder,
             // 悬浮球（Electron）集成
             ball::ball_start_cmd,
             ball::ball_show,

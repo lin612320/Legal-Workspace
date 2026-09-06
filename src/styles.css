@@ -1311,3 +1311,162 @@ button.primary.small {
   gap: 10px;
   align-items: center;
 }
+
+/* ============ 智能体（Agent）—— 数字员工任务视图 ============ */
+.agent-steps {
+  margin: 10px 0 0;
+  padding: 0 0 0 4px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.agent-step {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  background: var(--surface);
+}
+.agent-step.running { border-color: var(--brand); }
+.agent-step.done { opacity: 0.85; }
+.agent-step.failed { border-color: #c0392b; }
+.agent-step.waiting { border-color: #e67e22; }
+.agent-step-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.agent-step-name { font-weight: 600; }
+.agent-step-ref {
+  margin: 6px 0 0;
+  padding: 6px 8px;
+  background: var(--surface-muted);
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 200px;
+  overflow: auto;
+}
+.agent-step .chip { font-size: 11px; padding: 1px 8px; }
+.agent-log {
+  max-height: 260px;
+  overflow: auto;
+  background: var(--surface-muted);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.agent-log-line.tool { color: var(--brand-text); }
+.agent-log-line.reason { color: #2e7d32; }
+.agent-log-line.gate { color: #b9770e; }
+.agent-log-line.error { color: #c0392b; }
+.agent-log-line.info { color: var(--text); }
+.agent-deliverable {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  background: var(--surface-muted);
+  border-radius: var(--radius);
+  font-family: "Microsoft YaHei", sans-serif;
+  font-size: 13px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 480px;
+  overflow: auto;
+}
+.mini-docs {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mini-docs li {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  border-bottom: 1px dashed var(--border);
+  padding-bottom: 6px;
+}
+.mini-doc-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  overflow: hidden;
+}
+.mini-doc-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.mini-path {
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 320px;
+  display: block;
+}
+.mini-time { font-size: 11px; }
+
+/* 任务历史（P1）与角色接力（P3） */
+.agent-history {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+.agent-history-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.agent-history-row .ghost-btn {
+  flex: 1;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tag-role {
+  background: #eef3ff;
+  border: 1px solid #c9d6f5;
+  color: #3a56b8;
+}
+
+/* 多智能体接力链（P3 可视化） */
+.agent-relay {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin: 10px 0 2px;
+}
+.relay-node {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.relay-arrow { color: var(--text-muted); font-size: 12px; }
+.relay-chip {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+  font-size: 11px;
+  color: var(--text);
+  white-space: nowrap;
+}
+.relay-chip.done { border-color: #7bbf8a; color: #2e7d32; }
+.relay-chip.running { border-color: var(--brand); color: var(--brand-text); }
+.relay-chip.failed { border-color: #c0392b; color: #c0392b; }
+.relay-chip.waiting { border-color: #e67e22; color: #b9770e; }

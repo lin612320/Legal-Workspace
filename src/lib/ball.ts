@@ -7,6 +7,7 @@
 
 import { callRust, isTauri } from "./tauri";
 import { listen } from "@tauri-apps/api/event";
+import { invoke } from "@tauri-apps/api/core";
 
 // 前端（浏览器）访问不了文件系统，反向控制通过 fetch 调 Vite 插件来写控制文件
 async function sendBallCmd(cmd: string, extra: Record<string, unknown> = {}) {
@@ -26,13 +27,27 @@ async function sendBallCmd(cmd: string, extra: Record<string, unknown> = {}) {
 /** 启动悬浮球（Tauri 模式直接 spawn；Vite 模式由 dev:all 提前拉起） */
 export async function ballStart() {
   if (!isTauri()) return;
-  await callRust<void>("ball_start_cmd");
+  try {
+    await invoke("ball_start_cmd");
+  } catch (e) {
+    console.warn("[ball] 启动失败:", e);
+  }
 }
 
-/** 让悬浮球显示到桌面（打开面板） */
+/** 让悬浮球显示到桌面（打开面板）；失败时弹出可见提示（含具体原因） */
 export async function ballShow() {
   if (isTauri()) {
-    await callRust<void>("ball_show");
+    try {
+      await invoke("ball_show");
+    } catch (e) {
+      const msg = String(e);
+      console.error("[ball] show 失败:", msg);
+      try {
+        window.alert(`悬浮球启动失败：${msg}`);
+      } catch {
+        /* ignore */
+      }
+    }
   } else {
     await sendBallCmd("show");
   }

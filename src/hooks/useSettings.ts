@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { callRust, isTauri } from "../lib/tauri";
+import { encryptSecret, decryptSecret } from "../lib/secret";
 
 /** 设置键名常量 */
 export const KEYS = {
@@ -42,6 +43,11 @@ const DEFAULTS: SettingsState = {
 };
 
 const LS_KEY = "workbench:settings";
+
+/** 需加密落盘的设置键（API Key 类） */
+const SECRET_KEYS: string[] = [KEYS.aiApiKey, KEYS.translateApiKey];
+
+const isSecretKey = (k: string) => SECRET_KEYS.includes(k);
 
 function readLocal(): Partial<Record<string, string>> {
   try {
@@ -87,6 +93,11 @@ export function useSettings() {
           if (local[k] !== undefined) map[k] = local[k] as string;
         }
       }
+      // 解密 API Key（桌面 Rust 已解密返回；浏览器 local 若为密文也在此还原）
+      for (const k of SECRET_KEYS) {
+        const v = map[k];
+        if (v !== undefined) map[k] = decryptSecret(v);
+      }
       if (!alive) return;
       setS({
         loaded: true,
@@ -114,11 +125,13 @@ export function useSettings() {
   }, []);
 
   const persist = useCallback(async (key: string, value: string) => {
+    // API Key 加密后落盘（桌面 Rust 会再次加密；此处防浏览器 localStorage 明文）
+    const val = isSecretKey(key) ? encryptSecret(value) : value;
     if (isTauri()) {
-      await callRust<void>("settings_set", { key, value });
+      await callRust<void>("settings_set", { key, value: val });
     } else {
       const map = readLocal();
-      map[key] = value;
+      map[key] = val;
       writeLocal(map);
     }
   }, []);

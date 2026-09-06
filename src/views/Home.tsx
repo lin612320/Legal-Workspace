@@ -2,9 +2,12 @@ import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { NAV_ITEMS } from "../nav";
 import { Todo, useTodos } from "../hooks/useTodos";
+import { useDocuments } from "../hooks/useDocuments";
+import { openPathFile } from "../lib/open";
 
 export default function Home() {
   const { todos, toggle } = useTodos();
+  const { docs, remove: removeDoc } = useDocuments();
 
   const pending = useMemo(
     () =>
@@ -81,12 +84,53 @@ export default function Home() {
           )}
         </section>
 
-        {/* 最近文书 */}
+        {/* 最近文书（智能体交付物落点） */}
         <section className="card home-panel">
           <div className="panel-head">
             <h3>最近处理的文书</h3>
+            <Link to="/agent" className="more-link">
+              文书智能体 &gt;
+            </Link>
           </div>
-          <p className="muted">暂无文书记录。待"模板库/文书"生成或导入后，这里会展示最近编辑的文书。</p>
+          {docs.length === 0 ? (
+            <p className="muted">
+              暂无文书。用「文书智能体」把委托做成审查意见书 / 起诉状 / 质证意见后，会展示在这里（也可从「AI 问答」点「📄 生成文书任务」转交）。
+            </p>
+          ) : (
+            <ul className="mini-docs">
+              {docs.slice(0, 5).map((d) => (
+                <li key={d.id}>
+                  <div className="mini-doc-main">
+                    <span className="mini-title">{d.title}</span>
+                    {d.file_path && (
+                      <span className="muted mini-path" title={d.file_path}>
+                        {d.file_path}
+                      </span>
+                    )}
+                    <span className="muted mini-time">{fmtDateTime(d.updated_at)}</span>
+                  </div>
+                  <div className="mini-doc-actions">
+                    {d.kind && <span className="tag">.{d.kind}</span>}
+                    {d.file_path && (
+                      <button
+                        className="ghost-btn"
+                        title="用系统默认程序打开该交付文件"
+                        onClick={async () => {
+                          const err = await openPathFile(d.file_path as string);
+                          if (err) window.alert(`打开失败：${err}`);
+                        }}
+                      >
+                        打开
+                      </button>
+                    )}
+                    <button className="danger-btn" title="删除记录" onClick={() => void removeDoc(d.id)}>
+                      删除
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
       </div>
 
@@ -135,4 +179,11 @@ function todayStr(): string {
   const d = new Date();
   const week = ["日", "一", "二", "三", "四", "五", "六"][d.getDay()];
   return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 星期${week}`;
+}
+
+function fmtDateTime(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }

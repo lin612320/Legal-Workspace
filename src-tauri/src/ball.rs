@@ -181,7 +181,10 @@ fn resolve_ball() -> Option<BallSource> {
 
 /// 以子进程方式启动悬浮球并附加命令行参数
 /// 使用 CREATE_BREAKAWAY_FROM_JOB 使悬浮球脱离律政的 Job Object
-/// 这样律政退出不会杀掉悬浮球，悬浮球退出也不会影响律政
+/// 这样律政退出不会杀掉悬浮球，悬浮球退出也不会影响律政。
+/// 说明：若父进程本身位于不允许脱离的 Job 中，带该标志的 CreateProcess 会以
+/// ACCESS_DENIED 失败——此时自动去掉标志重试一次（代价：球与主程序同 Job，
+/// 主程序退出时球会一并退出；优先保证"能拉起来"）。
 fn spawn_ball(extra: &[&str]) -> Result<(), String> {
     let src = resolve_ball().ok_or_else(|| {
         "找不到悬浮球（Electron）。请设置环境变量 FLOATING_BALL_DIR，\
@@ -204,20 +207,44 @@ fn spawn_ball(extra: &[&str]) -> Result<(), String> {
     };
     args.extend(extra.iter().map(|s| s.to_string()));
 
-    let mut cmd = Command::new(&exe);
-    cmd.args(&args)
-        .current_dir(&current_dir)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
+    let build_cmd = || {
+        let mut cmd = Command::new(&exe);
+        cmd.args(&args)
+            .current_dir(&current_dir)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        cmd
+    };
 
     #[cfg(windows)]
-    cmd.creation_flags(CREATE_BREAKAWAY_FROM_JOB);
-
-    cmd.spawn()
-        .map_err(|e| format!("启动悬浮球失败：{e}"))?;
-
-    Ok(())
+    {
+        let try_spawn = |cmd: &mut Command, breakaway: bool| -> std::io::Result<()> {
+            cmd.creation_flags(if breakaway { CREATE_BREAKAWAY_FROM_JOB } else { 0 });
+            cmd.spawn().map(|_| ())
+        };
+        let mut cmd = build_cmd();
+        match try_spawn(&mut cmd, true) {
+            Ok(()) => Ok(()),
+            Err(e1) => {
+                eprintln!("[ball] 带 Job 脱离标志启动失败（{e1}），尝试普通方式…");
+                let mut cmd2 = build_cmd();
+                match try_spawn(&mut cmd2, false) {
+                    Ok(()) => Ok(()),
+                    Err(e2) => Err(format!(
+                        "启动悬浮球失败（脱离标志：{e1}；普通方式：{e2}）"
+                    )),
+                }
+            }
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        let mut cmd = build_cmd();
+        cmd.spawn()
+            .map(|_| ())
+            .map_err(|e| format!("启动悬浮球失败：{e}"))
+    }
 }
 
 /// 共享桥接文件路径（与 floating-ball main.js 一致）
@@ -275,7 +302,8 @@ fn now_ms() -> u64 {
 /// 对额外参数透传不可靠，而悬浮球主实例固定轮询控制文件，命令必达。
 fn send_ctrl(cmd: &str, extra: serde_json::Map<String, serde_json::Value>) -> Result<(), String> {
     // 先确保悬浮球实例在运行；若已存在，单实例锁会让新进程快速退出，无副作用
-    let _ = ball_start();
+    // 失败必须上抛（不再静默），前端才能提示用户
+    ball_start().map_err(|e| format!("悬浮球启动失败：{e}"))?;
 
     let mut payload = extra;
     payload.insert("ts".into(), serde_json::json!(now_ms()));

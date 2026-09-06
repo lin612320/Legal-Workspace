@@ -22,7 +22,37 @@ pub fn init(app_data_dir: &Path) -> Result<Connection, String> {
     Ok(conn)
 }
 
-/// 表结构迁移（包含 8 版块所需的核心表）
+/// 若表缺列则补列（幂等兼容迁移）
+fn ensure_column(
+    conn: &Connection,
+    table: &str,
+    column: &str,
+    decl: &str,
+) -> Result<(), String> {
+    let has: bool = {
+        let mut stmt = conn
+            .prepare(&format!("PRAGMA table_info({table})"))
+            .map_err(|e| e.to_string())?;
+        let cols = stmt
+            .query_map([], |r| r.get::<_, String>(1))
+            .map_err(|e| e.to_string())?;
+        let mut found = false;
+        for c in cols {
+            if c.map_err(|e| e.to_string())? == column {
+                found = true;
+                break;
+            }
+        }
+        found
+    };
+    if !has {
+        conn.execute(&format!("ALTER TABLE {table} ADD COLUMN {column} {decl}"), [])
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// 表结构迁移（包含全部版块与智能体任务所需的表）
 fn migrate(conn: &Connection) -> Result<(), String> {
     // 键值设置（AI / 翻译 API、备份配置、偏好）
     conn.execute(
@@ -100,7 +130,7 @@ fn migrate(conn: &Connection) -> Result<(), String> {
             .map_err(|e| e.to_string())?;
     }
 
-    // 版块 1：最近处理的文书
+    // 版块 1：最近处理的文书（智能体交付物落点）
     conn.execute(
         "CREATE TABLE IF NOT EXISTS documents (
             id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -111,6 +141,10 @@ fn migrate(conn: &Connection) -> Result<(), String> {
         [],
     )
     .map_err(|e| e.to_string())?;
+    // 兼容迁移：documents 增加交付物元信息列
+    ensure_column(conn, "documents", "file_path", "TEXT")?;
+    ensure_column(conn, "documents", "kind", "TEXT NOT NULL DEFAULT 'doc'")?;
+    ensure_column(conn, "documents", "meta", "TEXT")?;
 
     // 版块 4：AI 助手会话（多会话：chat_sessions + chat_messages）
     conn.execute(
@@ -169,11 +203,79 @@ fn migrate(conn: &Connection) -> Result<(), String> {
     )
     .map_err(|e| e.to_string())?;
 
+    // —— 智能体（数字员工）：任务 / 步骤 / 交付物 / 记忆 ——
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS tasks (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            kind       TEXT NOT NULL DEFAULT 'agent',
+            title      TEXT NOT NULL,
+            status     TEXT NOT NULL DEFAULT 'planned',
+            context    TEXT,
+            plan_json  TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )",
+        [],
+    )
+    .map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS task_steps (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_id       INTEGER NOT NULL DEFAULT 0,
+            seq           INTEGER NOT NULL,
+            name          TEXT NOT NULL,
+            tool          TEXT,
+            params_json   TEXT,
+            status        TEXT NOT NULL DEFAULT 'pending',
+            result_ref    TEXT,
+            need_confirm  INTEGER NOT NULL DEFAULT 0,
+            started_at    TEXT,
+            updated_at    TEXT
+        )",
+        [],
+    )
+    .map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS task_artifacts (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_id    INTEGER NOT NULL DEFAULT 0,
+            kind       TEXT NOT NULL,
+            file_path  TEXT,
+            title      TEXT,
+            content    TEXT,
+            meta_json  TEXT,
+            created_at TEXT NOT NULL
+        )",
+        [],
+    )
+    .map_err(|e| e.to_string())?;
+
+    // 记忆向量：前端计算 embedding 后回存，供跨任务召回（P2 长期记忆）
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS mem_vectors (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            kind        TEXT NOT NULL DEFAULT 'task',
+            ref_id      INTEGER,
+            title       TEXT,
+            content     TEXT,
+            vector_json TEXT,
+            created_at  TEXT NOT NULL
+        )",
+        [],
+    )
+    .map_err(|e| e.to_string())?;
+
+    // 法规 FTS5 全文索引（P2）：在种子数据之后建索引更合理（见 migrate 尾部）
     // 版块 2：法规表无数据时播种少量示例条文，便于即时体验检索
     seed_laws_if_empty(conn)?;
 
     // 版块 3：模板表无数据时播种内置文书
     seed_templates_if_empty(conn)?;
+
+    // FTS5 建索引（幂等、失败静默回退 LIKE）；放播种之后，保证索引与数据一致
+    let _ = ensure_laws_fts(conn);
 
     Ok(())
 }
@@ -302,6 +404,17 @@ pub fn get_setting(conn: &Connection, key: &str) -> Result<Option<String>, Strin
     Ok(row.map(|r| r.get::<_, String>(0).unwrap_or_default()))
 }
 
+/// 列出全部设置（用于启动时密钥迁移）
+pub fn settings_all(conn: &Connection) -> Result<Vec<(String, String)>, String> {
+    let mut stmt = conn
+        .prepare("SELECT key, value FROM settings")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
 /// 写入一条设置
 pub fn set_setting(conn: &Connection, key: &str, value: &str) -> Result<(), String> {
     conn.execute(
@@ -415,4 +528,414 @@ pub fn chat_history_save(
     )
     .map(|_| ())
     .map_err(|e| e.to_string())
+}
+
+// ---------------------------------------------------------------------------
+// FTS5 全文索引（P2）：外部内容表，任何一步失败都不致命（回退 LIKE 检索）
+// ---------------------------------------------------------------------------
+
+const FTS_COUNT_KEY: &str = "fts.laws_count";
+
+/// FTS5 是否可用（表存在即可视为可用；创建失败视为不支持）
+pub fn fts_ready(conn: &Connection) -> bool {
+    conn.query_row(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='laws_fts'",
+        [],
+        |_| Ok(()),
+    )
+    .is_ok()
+}
+
+/// 幂等创建 FTS5 外部内容表 + 同步触发器，并在条数变化时重建索引。
+/// 返回是否可用；整个过程失败只会打日志，不影响主流程。
+pub fn ensure_laws_fts(conn: &Connection) -> bool {
+    if let Err(e) = conn.execute(
+        "CREATE VIRTUAL TABLE IF NOT EXISTS laws_fts USING fts5(
+            title, chapter, article_no, content,
+            content='laws', content_rowid='id', tokenize='trigram'
+        )",
+        [],
+    ) {
+        eprintln!("[fts] 创建 laws_fts 失败（将回退 LIKE 检索）: {e}");
+        return false;
+    }
+    let _ = conn.execute(
+        "CREATE TRIGGER IF NOT EXISTS laws_ai AFTER INSERT ON laws BEGIN
+            INSERT INTO laws_fts(rowid, title, chapter, article_no, content)
+            VALUES (new.id, new.title, new.chapter, new.article_no, new.content);
+         END",
+        [],
+    );
+    let _ = conn.execute(
+        "CREATE TRIGGER IF NOT EXISTS laws_ad AFTER DELETE ON laws BEGIN
+            INSERT INTO laws_fts(laws_fts, rowid, title, chapter, article_no, content)
+            VALUES ('delete', old.id, old.title, old.chapter, old.article_no, old.content);
+         END",
+        [],
+    );
+    let _ = conn.execute(
+        "CREATE TRIGGER IF NOT EXISTS laws_au AFTER UPDATE ON laws BEGIN
+            INSERT INTO laws_fts(laws_fts, rowid, title, chapter, article_no, content)
+            VALUES ('delete', old.id, old.title, old.chapter, old.article_no, old.content);
+            INSERT INTO laws_fts(rowid, title, chapter, article_no, content)
+            VALUES (new.id, new.title, new.chapter, new.article_no, new.content);
+         END",
+        [],
+    );
+    // 条数变化或首次启动时重建一次（预置库 15 万条首次约数秒，一次性成本）
+    let want_rebuild = match get_setting(conn, FTS_COUNT_KEY) {
+        Ok(Some(stored)) => stored
+            .parse::<i64>()
+            .map(|n| n != laws_count(conn))
+            .unwrap_or(true),
+        _ => true,
+    };
+    if want_rebuild {
+        if let Err(e) = conn.execute("INSERT INTO laws_fts(laws_fts) VALUES('rebuild')", []) {
+            eprintln!("[fts] 重建索引失败（将回退 LIKE 检索）: {e}");
+            return false;
+        }
+        let _ = set_setting(conn, FTS_COUNT_KEY, &laws_count(conn).to_string());
+    }
+    fts_ready(conn)
+}
+
+pub fn laws_count(conn: &Connection) -> i64 {
+    conn.query_row("SELECT COUNT(*) FROM laws", [], |r| r.get(0)).unwrap_or(0)
+}
+
+/// 把用户关键词转成 FTS5 MATCH 短语（引号包裹 + 双引号转义），防注入/语法冲突
+pub fn fts_phrase(keyword: &str) -> String {
+    format!("\"{}\"", keyword.replace('"', "\"\""))
+}
+
+// ---------------------------------------------------------------------------
+// 版块 1：最近文书（documents）—— 智能体交付物落点
+// ---------------------------------------------------------------------------
+
+pub fn documents_list(conn: &Connection) -> Result<Vec<serde_json::Value>, String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, title, content, file_path, kind, meta, updated_at
+             FROM documents ORDER BY updated_at DESC LIMIT 200",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |r| {
+            Ok(serde_json::json!({
+                "id": r.get::<_, i64>(0)?,
+                "title": r.get::<_, String>(1)?,
+                "content": r.get::<_, Option<String>>(2)?,
+                "file_path": r.get::<_, Option<String>>(3)?,
+                "kind": r.get::<_, String>(4)?,
+                "meta": r.get::<_, Option<String>>(5)?,
+                "updated_at": r.get::<_, String>(6)?,
+            }))
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+pub fn document_save(
+    conn: &Connection,
+    title: &str,
+    content: Option<&str>,
+    file_path: Option<&str>,
+    kind: &str,
+    meta: Option<&str>,
+) -> Result<i64, String> {
+    let now = chrono::Local::now().to_rfc3339();
+    conn.execute(
+        "INSERT INTO documents(title, content, file_path, kind, meta, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        rusqlite::params![title, content, file_path, kind, meta, now],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(conn.last_insert_rowid())
+}
+
+pub fn document_delete(conn: &Connection, id: i64) -> Result<(), String> {
+    conn.execute("DELETE FROM documents WHERE id = ?1", [id])
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+// ---------------------------------------------------------------------------
+// 智能体任务（tasks / task_steps / task_artifacts）
+// ---------------------------------------------------------------------------
+
+pub fn task_create(
+    conn: &Connection,
+    kind: &str,
+    title: &str,
+    context: Option<&str>,
+    plan_json: Option<&str>,
+) -> Result<i64, String> {
+    let now = chrono::Local::now().to_rfc3339();
+    conn.execute(
+        "INSERT INTO tasks(kind, title, status, context, plan_json, created_at, updated_at)
+         VALUES (?1, ?2, 'planned', ?3, ?4, ?5, ?5)",
+        rusqlite::params![kind, title, context, plan_json, now],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(conn.last_insert_rowid())
+}
+
+fn task_row_to_json(
+    r: &rusqlite::Row,
+) -> rusqlite::Result<serde_json::Value> {
+    Ok(serde_json::json!({
+        "id": r.get::<_, i64>(0)?,
+        "kind": r.get::<_, String>(1)?,
+        "title": r.get::<_, String>(2)?,
+        "status": r.get::<_, String>(3)?,
+        "context": r.get::<_, Option<String>>(4)?,
+        "plan_json": r.get::<_, Option<String>>(5)?,
+        "created_at": r.get::<_, String>(6)?,
+        "updated_at": r.get::<_, String>(7)?,
+    }))
+}
+
+pub fn task_list(conn: &Connection) -> Result<Vec<serde_json::Value>, String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, kind, title, status, context, plan_json, created_at, updated_at
+             FROM tasks ORDER BY updated_at DESC LIMIT 100",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], task_row_to_json)
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+pub fn task_get(conn: &Connection, id: i64) -> Result<Option<serde_json::Value>, String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, kind, title, status, context, plan_json, created_at, updated_at
+             FROM tasks WHERE id = ?1",
+        )
+        .map_err(|e| e.to_string())?;
+    let mut rows = stmt
+        .query_map([id], task_row_to_json)
+        .map_err(|e| e.to_string())?;
+    let task = match rows.next() {
+        Some(Ok(v)) => v,
+        Some(Err(e)) => return Err(e.to_string()),
+        None => return Ok(None),
+    };
+    // steps
+    let steps: Vec<serde_json::Value> = {
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, task_id, seq, name, tool, params_json, status, result_ref,
+                        need_confirm, started_at, updated_at
+                 FROM task_steps WHERE task_id = ?1 ORDER BY seq",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([id], |r| {
+                Ok(serde_json::json!({
+                    "id": r.get::<_, i64>(0)?,
+                    "task_id": r.get::<_, i64>(1)?,
+                    "seq": r.get::<_, i64>(2)?,
+                    "name": r.get::<_, String>(3)?,
+                    "tool": r.get::<_, Option<String>>(4)?,
+                    "params_json": r.get::<_, Option<String>>(5)?,
+                    "status": r.get::<_, String>(6)?,
+                    "result_ref": r.get::<_, Option<String>>(7)?,
+                    "need_confirm": r.get::<_, i64>(8)? == 1,
+                    "started_at": r.get::<_, Option<String>>(9)?,
+                    "updated_at": r.get::<_, Option<String>>(10)?,
+                }))
+            })
+            .map_err(|e| e.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?
+    };
+    // artifacts
+    let artifacts: Vec<serde_json::Value> = {
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, task_id, kind, file_path, title, content, meta_json, created_at
+                 FROM task_artifacts WHERE task_id = ?1 ORDER BY id",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([id], |r| {
+                Ok(serde_json::json!({
+                    "id": r.get::<_, i64>(0)?,
+                    "kind": r.get::<_, String>(1)?,
+                    "file_path": r.get::<_, Option<String>>(2)?,
+                    "title": r.get::<_, Option<String>>(3)?,
+                    "content": r.get::<_, Option<String>>(4)?,
+                    "meta_json": r.get::<_, Option<String>>(5)?,
+                    "created_at": r.get::<_, String>(6)?,
+                }))
+            })
+            .map_err(|e| e.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?
+    };
+    Ok(Some(serde_json::json!({
+        "task": task,
+        "steps": steps,
+        "artifacts": artifacts,
+    })))
+}
+
+pub fn task_set_status(
+    conn: &Connection,
+    id: i64,
+    status: &str,
+) -> Result<(), String> {
+    let now = chrono::Local::now().to_rfc3339();
+    conn.execute(
+        "UPDATE tasks SET status = ?1, updated_at = ?2 WHERE id = ?3",
+        rusqlite::params![status, now, id],
+    )
+    .map(|_| ())
+    .map_err(|e| e.to_string())
+}
+
+pub fn task_delete(conn: &Connection, id: i64) -> Result<(), String> {
+    conn.execute("DELETE FROM task_steps WHERE task_id = ?1", [id])
+        .map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM task_artifacts WHERE task_id = ?1", [id])
+        .map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM tasks WHERE id = ?1", [id])
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+/// 全量替换某任务的步骤（计划卡确认后调用）；返回新步骤 id 列表（顺序与入参一致）
+pub fn task_steps_save(
+    conn: &Connection,
+    task_id: i64,
+    steps: &[serde_json::Value],
+) -> Result<Vec<i64>, String> {
+    conn.execute("DELETE FROM task_steps WHERE task_id = ?1", [task_id])
+        .map_err(|e| e.to_string())?;
+    let mut ids = Vec::with_capacity(steps.len());
+    for (i, s) in steps.iter().enumerate() {
+        let name = s.get("name").and_then(|v| v.as_str()).unwrap_or("步骤");
+        let tool = s.get("tool").and_then(|v| v.as_str());
+        let params_json = s
+            .get("params")
+            .map(|v| v.to_string())
+            .or_else(|| s.get("params_json").and_then(|v| v.as_str()).map(String::from));
+        let need_confirm = s.get("need_confirm").and_then(|v| v.as_i64()).unwrap_or(0);
+        conn.execute(
+            "INSERT INTO task_steps(task_id, seq, name, tool, params_json, status, need_confirm)
+             VALUES (?1, ?2, ?3, ?4, ?5, 'pending', ?6)",
+            rusqlite::params![task_id, i as i64, name, tool, params_json, need_confirm],
+        )
+        .map_err(|e| e.to_string())?;
+        ids.push(conn.last_insert_rowid());
+    }
+    Ok(ids)
+}
+
+/// 更新某一步的状态与结论摘要
+pub fn task_step_update(
+    conn: &Connection,
+    step_id: i64,
+    status: &str,
+    result_ref: Option<&str>,
+) -> Result<(), String> {
+    let now = chrono::Local::now().to_rfc3339();
+    conn.execute(
+        "UPDATE task_steps SET status = ?1, result_ref = COALESCE(?2, result_ref),
+                started_at = COALESCE(started_at, ?3), updated_at = ?3
+         WHERE id = ?4",
+        rusqlite::params![status, result_ref, now, step_id],
+    )
+    .map(|_| ())
+    .map_err(|e| e.to_string())
+}
+
+/// 追加一条任务交付物；返回 id
+pub fn task_artifact_add(
+    conn: &Connection,
+    task_id: i64,
+    kind: &str,
+    file_path: Option<&str>,
+    title: Option<&str>,
+    content: Option<&str>,
+    meta_json: Option<&str>,
+) -> Result<i64, String> {
+    let now = chrono::Local::now().to_rfc3339();
+    conn.execute(
+        "INSERT INTO task_artifacts(task_id, kind, file_path, title, content, meta_json, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        rusqlite::params![task_id, kind, file_path, title, content, meta_json, now],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(conn.last_insert_rowid())
+}
+
+// ---------------------------------------------------------------------------
+// 记忆（mem_vectors）：embedding 由前端计算后回存
+// ---------------------------------------------------------------------------
+
+pub fn mem_save(
+    conn: &Connection,
+    kind: &str,
+    ref_id: Option<i64>,
+    title: &str,
+    content: &str,
+    vector_json: &str,
+) -> Result<i64, String> {
+    let now = chrono::Local::now().to_rfc3339();
+    conn.execute(
+        "INSERT INTO mem_vectors(kind, ref_id, title, content, vector_json, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        rusqlite::params![kind, ref_id, title, content, vector_json, now],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(conn.last_insert_rowid())
+}
+
+pub fn mem_list(conn: &Connection, kind: Option<&str>) -> Result<Vec<serde_json::Value>, String> {
+    let sql = match kind {
+        Some(k) if !k.is_empty() => {
+            "SELECT id, kind, ref_id, title, content, vector_json, created_at
+             FROM mem_vectors WHERE kind = ?1 ORDER BY id DESC LIMIT 500".to_string()
+        }
+        _ => {
+            "SELECT id, kind, ref_id, title, content, vector_json, created_at
+             FROM mem_vectors ORDER BY id DESC LIMIT 500".to_string()
+        }
+    };
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let rows = if let Some(k) = kind.filter(|k| !k.is_empty()) {
+        let rows = stmt
+            .query_map([k], |r| {
+                Ok(serde_json::json!({
+                    "id": r.get::<_, i64>(0)?,
+                    "kind": r.get::<_, String>(1)?,
+                    "ref_id": r.get::<_, Option<i64>>(2)?,
+                    "title": r.get::<_, String>(3)?,
+                    "content": r.get::<_, String>(4)?,
+                    "vector_json": r.get::<_, Option<String>>(5)?,
+                    "created_at": r.get::<_, String>(6)?,
+                }))
+            })
+            .map_err(|e| e.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?
+    } else {
+        let rows = stmt
+            .query_map([], |r| {
+                Ok(serde_json::json!({
+                    "id": r.get::<_, i64>(0)?,
+                    "kind": r.get::<_, String>(1)?,
+                    "ref_id": r.get::<_, Option<i64>>(2)?,
+                    "title": r.get::<_, String>(3)?,
+                    "content": r.get::<_, String>(4)?,
+                    "vector_json": r.get::<_, Option<String>>(5)?,
+                    "created_at": r.get::<_, String>(6)?,
+                }))
+            })
+            .map_err(|e| e.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?
+    };
+    Ok(rows)
 }

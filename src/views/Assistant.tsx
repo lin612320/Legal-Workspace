@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ChatMsg, SYSTEM_PROMPTS, chatStream } from "../lib/ai";
 import { useSettings } from "../hooks/useSettings";
 import { callRust, isTauri } from "../lib/tauri";
 import { Law, SAMPLE_LAWS, searchLaws } from "../data/laws";
 import { onBallPush, type BallPushPayload } from "../lib/ball";
+import { LS_AGENT_HANDOFF } from "../lib/agent";
 
 const MODES = ["通用", "审合同", "审质证"] as const;
 
@@ -132,6 +133,7 @@ function renderMarkdown(text: string): ReactNode[] {
 export default function Assistant() {
   const { s } = useSettings();
   const { search } = useLocation();
+  const nav = useNavigate();
   const isFloat = new URLSearchParams(search).get("float") === "1";
   const desktop = isTauri();
 
@@ -389,6 +391,33 @@ export default function Assistant() {
     await callRust<void>("float_out");
   }
 
+  // —— AI 问答 → 文书智能体 交接桥 ——
+  // 定位分工：AI 问答给出分析与结论；文书智能体把它做成可交付文书（.docx）。
+  const lastAnswer = [...messages]
+    .reverse()
+    .find((m) => m.role === "assistant" && m.content.trim());
+  const lastAnswerIdx = lastAnswer ? messages.indexOf(lastAnswer) : -1;
+  const lastQuestion = (() => {
+    for (let i = lastAnswerIdx - 1; i >= 0; i--) {
+      if (messages[i].role === "user") return messages[i].content;
+    }
+    return "";
+  })();
+  const canHandoff = !busy && !isFloat && !!lastAnswer;
+  const toAgentHandoff = () => {
+    if (!lastAnswer) return;
+    const kind = mode === "审质证" ? "cross_exam" : mode === "审合同" ? "review" : "review";
+    const text =
+      `【由 AI 问答转交 · 原模式：${mode}】\n\n问题 / 材料：\n${lastQuestion || "（未找到上一条用户消息）"}\n\n` +
+      `AI 问答结论（供起草参考）：\n${lastAnswer.content}`;
+    try {
+      localStorage.setItem(LS_AGENT_HANDOFF, JSON.stringify({ kind, text, ts: Date.now() }));
+    } catch {
+      /* ignore */
+    }
+    nav("/agent");
+  };
+
   return (
     <div className={`assistant-page ${isFloat ? "float" : ""}`}>
       {/* 会话栏（仅桌面版大窗口显示） */}
@@ -439,6 +468,15 @@ export default function Assistant() {
               置顶悬浮窗
             </button>
           )}
+          {canHandoff && (
+            <button
+              className="ghost-btn"
+              onClick={toAgentHandoff}
+              title="把本轮问答交给「文书智能体」，继续生成可交付文书（.docx）"
+            >
+              📄 生成文书任务
+            </button>
+          )}
           {messages.length > 0 && (
             <button
               className="ghost-btn"
@@ -457,11 +495,14 @@ export default function Assistant() {
       <div className="assistant-messages" ref={scrollRef}>
         {messages.length === 0 ? (
           <div className="assistant-empty">
-            <div className="assistant-empty-title">AI 助手</div>
+            <div className="assistant-empty-title">AI 法律问答</div>
             <p className="muted">
               {mode === "审合同" && "粘贴/输入合同条款，自动审查风险并给出修改建议。"}
               {mode === "审质证" && "围绕证据三性帮你分析质证要点或起草质证意见。"}
               {mode === "通用" && "直接提问，本助手会以法律视角专业作答。"}
+            </p>
+            <p className="muted hint">
+              需要把问答结果做成可交付文书？回答生成后可点右上「📄 生成文书任务」交给文书智能体。
             </p>
             {!configured && (
               <Link to="/settings" className="assistant-setup">
