@@ -1,9 +1,9 @@
 {
   "name": "legal-workbench",
   "private": true,
-  "version": "0.4.1",
+  "version": "0.5.0",
   "type": "module",
-  "description": "律政工作台 —— 法律工作者本地桌面助手（Tauri 2 + React + TypeScript）",
+  "description": "律衡（Legal Workbench，工程名 legal-workbench）—— 法律工作者本地桌面助手（Tauri 2 + React + TypeScript）",
   "scripts": {
     "dev": "vite",
     "dev:all": "node scripts/dev-with-ball.cjs",

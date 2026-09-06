@@ -1,6 +1,6 @@
 import { useLocation } from "react-router-dom";
 
-/** 左侧导航的 8 个版块定义 */
+/** 左侧导航的 10 个版块定义 */
 export interface NavItem {
   key: string;
   label: string;
