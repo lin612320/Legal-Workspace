@@ -3,6 +3,7 @@ node_modules/
 dist/
 dist-ssr/
 dist-050/
+dist-060/
 *.local
 
 # Rust / Tauri
