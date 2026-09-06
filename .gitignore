@@ -2,6 +2,7 @@
 node_modules/
 dist/
 dist-ssr/
+dist-050/
 *.local
 
 # Rust / Tauri
@@ -14,6 +15,7 @@ src-tauri/gen/schemas/
 .idea/
 .DS_Store
 Thumbs.db
+~$*
 
 # 本地备份文件
 *.db-wal
