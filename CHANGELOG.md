@@ -30,6 +30,7 @@
 
 ### 变更
 
+- 版本升至 0.4.0，安装包 `律政工作台_0.4.0_x64-setup.exe`（约 135 MB，内嵌法库预置库 + 悬浮球 `win-unpacked-0.4.0`）。
 - 打包配置：`bundle.targets` 收敛为 `["nsis"]`（与历史交付一致，不再触发 MSI/WiX），`bundle.icon` 补入 `icons/icon.ico`，修复 `tauri build` 报 "Couldn't find a .ico icon" 无法出包的问题。
 - 左侧导航由 9 版块增至 10 版块：新增「文书智能体」，并将「AI 助手」更名为「AI 问答」（咨询与任务交付命名区分）；相关 README 与文档索引同步。
 
