@@ -113,13 +113,13 @@ window.api.onApplyTheme((theme) => applyTheme(theme));
 // ---- 关联查找法规（走主程序本地法库，经桥接文件往返） ----
 let lawsTimer = null;
 function showRelatePlaceholder(text) {
-  buffer = `> 关联查找法规 🗄（本地法库）\n\n已选中文本：\`${text.slice(0, 60)}${text.length > 60 ? '…' : ''}\`\n\n正在通过主程序「律衡」检索本地法条库…`;
+  buffer = `> 关联查找法规 🗄（本地法库）\n\n已选中文本：\`${text.slice(0, 60)}${text.length > 60 ? '…' : ''}\`\n\n正在通过主程序「法元」检索本地法条库…`;
   renderResult(true);
   setStatus('法库检索中…');
   window.api.askLawsSearch(text);
   if (lawsTimer) clearTimeout(lawsTimer);
   lawsTimer = setTimeout(() => {
-    buffer += '\n\n> ⚠ 未收到主程序响应：请确认「律衡」桌面版已启动后重试（浏览器预览模式不提供本地法库）。';
+    buffer += '\n\n> ⚠ 未收到主程序响应：请确认「法元」桌面版已启动后重试（浏览器预览模式不提供本地法库）。';
     renderResult(false);
     setStatus('未连接主程序');
   }, 6000);
@@ -210,7 +210,7 @@ $('btnTheme').addEventListener('click', () => toggleTheme());
 $('btnWorkbench').addEventListener('click', async () => {
   const text = $('source').value.trim() || '';
   const res = await window.api.pushToWorkbench(text, 'prefill');
-  if (res?.ok) setStatus(text ? '已推送到律衡' : '已拉起律衡');
+  if (res?.ok) setStatus(text ? '已推送到法元' : '已拉起法元');
   else setStatus('操作失败：' + (res?.error || '未知错误'));
 });
 $('btnSettings').addEventListener('click', async () => {

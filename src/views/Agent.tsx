@@ -377,7 +377,7 @@ export default function Agent() {
       const hasFail = t.steps.some((s) => s.status === "failed");
       await setStatus(t, hasFail ? "failed" : "done");
       if (!hasFail) {
-        pushLog({ level: "info", text: "任务完成，小衡已生成交付物草稿（下方预览可编辑导出）" });
+        pushLog({ level: "info", text: "任务完成，小元已生成交付物草稿（下方预览可编辑导出）" });
         void rememberTask(cfg, t);
       }
     }
@@ -657,10 +657,10 @@ export default function Agent() {
     <div className="agent-page">
       {/* 顶部：任务类型 + 计划/执行按钮 */}
       <div className="card">
-        <h3 style={{ marginTop: 0 }}>文书智能体「小衡」 · 法律任务交付</h3>
+        <h3 style={{ marginTop: 0 }}>文书智能体「小元」 · 法律任务交付</h3>
         <p className="muted hint" style={{ marginTop: 0 }}>
-          小衡是律衡的文书智能体人设，负责<b>端到端任务交付</b>：把合同 / 案情交给它 → 计划卡 → 自主调用本地法库工具 → 交付可打开的 .docx。
-          与「AI 问答」互补：问答给即时分析与建议，小衡把委托做成可溯源、可验收的文书成果。模型配置见「数据设置」；未配置时为演示模式（工具仍真实执行）。
+          小元是法元的文书智能体人设，负责<b>端到端任务交付</b>：把合同 / 案情交给它 → 计划卡 → 自主调用本地法库工具 → 交付可打开的 .docx。
+          与「AI 问答」互补：问答给即时分析与建议，小元把委托做成可溯源、可验收的文书成果。模型配置见「数据设置」；未配置时为演示模式（工具仍真实执行）。
         </p>
         <div className="mode-chips">
           {TASK_KINDS.map((k) => (

@@ -56,7 +56,7 @@ export function normalizeEndpoint(baseUrl: string): string {
 }
 
 export const SYSTEM_PROMPTS: Record<string, string> = {
-  通用: "你是「律衡」的 AI 法律助手，请专业、简练地回答用户问题。",
+  通用: "你是「法元 · Faron」的 AI 法律助手，请专业、简练地回答用户问题。",
   审合同:
     "你是资深合规律师。请审查用户提供的合同条款，逐一指出：风险条款、责任失衡、约定不明确或可能无效的地方，并给出可直接采用的修改建议。用要点分条输出，先风险后建议。",
   审质证:

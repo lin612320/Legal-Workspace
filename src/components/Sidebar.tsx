@@ -9,8 +9,8 @@ export default function Sidebar() {
   return (
     <aside className="sidebar">
       <div className="brand">
-        <span className="brand-mark">律</span>
-        <span className="brand-name">律衡</span>
+        <span className="brand-mark">法</span>
+        <span className="brand-name">法元</span>
       </div>
       <nav className="nav">
         {NAV_ITEMS.map((item) => (

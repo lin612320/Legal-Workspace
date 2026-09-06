@@ -537,7 +537,7 @@ export function composeDeliverable(task: AgentTask): string {
   const lines: string[] = [];
   lines.push(`# ${title}`);
   lines.push("");
-  lines.push(`> 由「律衡 · 小衡（${meta.label}智能体）」生成${task.mode === "demo" ? "（演示模式，未配置模型）" : ""}`);
+  lines.push(`> 由「法元 · 小元（${meta.label}智能体）」生成${task.mode === "demo" ? "（演示模式，未配置模型）" : ""}`);
   lines.push("");
   lines.push("## 一、任务输入");
   lines.push("");
