@@ -30,6 +30,7 @@
 
 ### 变更
 
+- 打包配置：`bundle.targets` 收敛为 `["nsis"]`（与历史交付一致，不再触发 MSI/WiX），`bundle.icon` 补入 `icons/icon.ico`，修复 `tauri build` 报 "Couldn't find a .ico icon" 无法出包的问题。
 - 左侧导航由 9 版块增至 10 版块：新增「文书智能体」，并将「AI 助手」更名为「AI 问答」（咨询与任务交付命名区分）；相关 README 与文档索引同步。
 
 ## [0.3.2] - 2026-09-04
