@@ -410,10 +410,28 @@ async function runReasoningStep(
       { role: "user", content: `任务输入：\n${task.context.slice(0, 6000)}\n\n检索/前序结果：\n${evidence || "（无）"}` },
     ];
     const { content } = await chatStreamOnce(cfg, msgs, { signal, temperature: 0.4 });
-    return content.trim() || "（模型未返回内容）";
+    let out = content.trim() || "（模型未返回内容）";
+    // 质检角色：无论模型说了什么，都追加一段“代码必然执行”的确定性引用自检结论
+    if (step.role === "qa") out += appendQaAudit(task, evidence);
+    return out;
   }
   const hint = DEMO_REASON_PREFIX + (step.prompt || step.name);
-  return hint + "\n" + demoReasoning(task, step);
+  let out = hint + "\n" + demoReasoning(task, step);
+  if (step.role === "qa") out += appendQaAudit(task, evidence);
+  return out;
+}
+
+/** 质检步骤收尾：对“已执行步骤产出”追加确定性引用自检结论（规则执行，非模型自述） */
+function appendQaAudit(task: AgentTask, evidence: string): string {
+  const audit = auditCitations(evidence, task.refs);
+  if (audit.ok) {
+    return `\n\n【引用自检 · 确定性规则】通过：产出中共识别 ${audit.total} 处条文号引用，全部可回溯到本次工具真实返回的本地法条（${audit.covered}/${audit.total}）。`;
+  }
+  const listed = audit.unmatched
+    .slice(0, 8)
+    .map((t) => `「${t}」`)
+    .join("、");
+  return `\n\n【引用自检 · 确定性规则】需人工核实：产出中共识别 ${audit.total} 处条文号引用，其中 ${audit.unmatched.length} 处未在工具真实返回中找到对应条文（${listed}${audit.unmatched.length > 8 ? "…" : ""}）——可能来自用户材料原文或模型笔误，已提示人工核实后再采用。`;
 }
 
 /** 演示模式：根据已检索到的引用给出可读的分析占位 */
@@ -436,6 +454,80 @@ function demoReasoning(task: AgentTask, step: AgentStep): string {
 }
 
 // ---------------------------------------------------------------------------
+// 确定性引用自检（反幻觉硬校验：规则执行，非模型自查）
+// ---------------------------------------------------------------------------
+
+/** 自检方法脚注（写进交付物，说明识别范围与判据） */
+export const CITE_PATTERNS_NOTE =
+  "自检为确定性规则校验：按中文/日文「第X条(之Y/のY)」、美国法典「§NN」等条文号格式识别正文引用，" +
+  "并判定每条引用是否能在「本次工具真实返回」的法条中找到对应条文号；未覆盖项仅提示人工核实，不视为有效引用。";
+
+/** 从文本中抽取去重后的条文号引用 token */
+export function extractCitationTokens(text: string): string[] {
+  const re =
+    /第[0-9〇零一二三四五六七八九十百千万]+条(?:(?:之|の|ノ)[0-9〇零一二三四五六七八九十百千万]+)?|§\s*\d+(?:[.\-]\d+)?(?:\(\d+\))?/g;
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const m of text.matchAll(re)) {
+    const t = m[0].replace(/\s+/g, "");
+    if (!seen.has(t)) {
+      seen.add(t);
+      out.push(t);
+    }
+  }
+  return out;
+}
+
+/** 规范化条文号（去空白与括号），用于对照 */
+function normArticleNo(s: string | null): string {
+  return (s ?? "").replace(/\s+/g, "").replace(/[（）()]/g, "");
+}
+
+/** 条文号是否“覆盖”引用：完全相等，或条文号以该引用为前缀（如「第一百四十三条」覆盖「第一百四十三条第一款」） */
+function articleCovers(articleNo: string | null, token: string): boolean {
+  const a = normArticleNo(articleNo);
+  const t = normArticleNo(token);
+  if (!a || !t) return false;
+  return a === t || (t.length < a.length && a.startsWith(t));
+}
+
+export interface CitationAudit {
+  ok: boolean;
+  total: number; // 识别到的条文号引用数（去重）
+  covered: number; // 能在工具返回法条中找到的引用数
+  unmatched: string[]; // 未找到的引用清单
+}
+
+/**
+ * 对“正文（模型产出）”做确定性引用自检：
+ * 正文中每一条条文号引用都必须能对应到本次工具真实返回的法条（task.refs）。
+ * 这是代码层面的硬校验——不依赖模型“说自己检查过”，而是规则必然执行。
+ */
+export function auditCitations(bodyText: string, refs: LawRef[]): CitationAudit {
+  const tokens = extractCitationTokens(bodyText);
+  const covered = tokens.filter((t) => refs.some((r) => articleCovers(r.article_no, t)));
+  const unmatched = tokens.filter((t) => !refs.some((r) => articleCovers(r.article_no, t)));
+  return { ok: unmatched.length === 0, total: tokens.length, covered: covered.length, unmatched };
+}
+
+/** 把自检结果渲染成 Markdown（写进交付物 / QA 步骤日志） */
+export function auditReport(a: CitationAudit): string {
+  const lines: string[] = [];
+  lines.push(`- 识别到条文号引用 ${a.total} 处（去重）`);
+  lines.push(`- 与「本次工具真实返回」法条对应：${a.covered}/${a.total}`);
+  if (a.ok) {
+    lines.push("- ✅ 自检通过：正文引用均可回溯到本次检索/工具返回的本地法条（未发现编造引用）");
+  } else {
+    lines.push(
+      "- ⚠ 以下引用未在工具返回中找到对应条文（可能来自用户材料原文或模型笔误，请人工核实后再采用）：\n  " +
+        a.unmatched.map((t) => `「${t}」`).join("、"),
+    );
+  }
+  lines.push(`- ${CITE_PATTERNS_NOTE}`);
+  return lines.join("\n");
+}
+
+// ---------------------------------------------------------------------------
 // 交付物合成 + 导出
 // ---------------------------------------------------------------------------
 
@@ -453,12 +545,15 @@ export function composeDeliverable(task: AgentTask): string {
   lines.push("");
   lines.push("## 二、执行过程与分步结果");
   lines.push("");
+  const stepTexts: string[] = [];
   for (const s of task.steps) {
     lines.push(`### ${s.seq + 1}. ${s.name}`);
     lines.push("");
     if (s.tool) lines.push(`- 工具：${s.tool}`);
-    lines.push((s.result_ref ?? "（未产出）").slice(0, 3000));
+    const ref = (s.result_ref ?? "（未产出）").slice(0, 3000);
+    lines.push(ref);
     lines.push("");
+    stepTexts.push(ref);
   }
   lines.push("## 三、引用的法规条文（可溯源）");
   lines.push("");
@@ -475,7 +570,13 @@ export function composeDeliverable(task: AgentTask): string {
     }
   }
   lines.push("");
-  lines.push("## 四、结论");
+  lines.push("## 四、引用自检（确定性规则校验）");
+  lines.push("");
+  // 只审计“模型/步骤产出”（二）里的引用——不审计输入原文与自检段自身
+  const audit = auditCitations(stepTexts.join("\n"), task.refs);
+  lines.push(auditReport(audit));
+  lines.push("");
+  lines.push("## 五、结论");
   lines.push("");
   lines.push("本交付物由智能体自动生成，供人工复核；引用法条以工具返回的本地库原文为准。");
   return lines.join("\n");
