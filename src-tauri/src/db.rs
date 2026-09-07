@@ -78,6 +78,40 @@ fn migrate(conn: &Connection) -> Result<(), String> {
     )
     .map_err(|e| e.to_string())?;
 
+    // 赛事版：law 支持中文译名（title_zh）与条文中文译文（content_zh）。
+    // 老库（含预置库）自动补列；两者可空——无译文时界面仍只显示原文。
+    ensure_column(conn, "laws", "title_zh", "TEXT")?;
+    ensure_column(conn, "laws", "content_zh", "TEXT")?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_laws_title ON laws(title)",
+        [],
+    )
+    .map_err(|e| e.to_string())?;
+
+    // 赛事版：整部法元信息（中文译名/原文名/法律领域/简介），按 laws.title 关联（每部法一行）
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS laws_meta (
+            title     TEXT PRIMARY KEY,   -- 对应 laws.title（精确匹配）
+            country   TEXT,               -- 日本 / 美国 / 中国
+            domain    TEXT,               -- 法律领域（宪法·国家法 / 民法 / 刑法 …）
+            name_zh   TEXT,               -- 中文译名（如 日本国宪法 / 美国法典 Title 42 中文名）
+            name_orig TEXT,               -- 原文名（如 Constitution of the United States / Title 42 — The Public Health and Welfare）
+            intro     TEXT                -- 整部法简介（元信息展示用）
+        )",
+        [],
+    )
+    .map_err(|e| e.to_string())?;
+
+    // 赛事版：国家页顶部概览（政体 / 国体 / 法律体系），每国一行
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS country_intro (
+            country TEXT PRIMARY KEY,     -- 日本 / 美国 / 中国
+            intro   TEXT NOT NULL
+        )",
+        [],
+    )
+    .map_err(|e| e.to_string())?;
+
     // 版块 3：文书模板
     conn.execute(
         "CREATE TABLE IF NOT EXISTS templates (
@@ -274,6 +308,10 @@ fn migrate(conn: &Connection) -> Result<(), String> {
     // 版块 3：模板表无数据时播种内置文书
     seed_templates_if_empty(conn)?;
 
+    // 赛事版：国家概览与整部法元信息（仅首次播种，不覆盖导入/更新的元数据）
+    seed_country_intro_if_empty(conn)?;
+    seed_laws_meta_if_empty(conn)?;
+
     // FTS5 建索引（幂等、失败静默回退 LIKE）；放播种之后，保证索引与数据一致
     let _ = ensure_laws_fts(conn);
 
@@ -388,6 +426,141 @@ fn seed_laws_if_empty(conn: &Connection) -> Result<(), String> {
             "INSERT INTO laws(title, chapter, article_no, content, source)
              VALUES (?1, ?2, ?3, ?4, '内置示例')",
             rusqlite::params![s[0], s[1], s[2], s[3]],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// 赛事版：国家页顶部概览（政体 / 国体 / 法律体系）首启播种；仅当表空时插入。
+fn seed_country_intro_if_empty(conn: &Connection) -> Result<(), String> {
+    let count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM country_intro", [], |r| r.get(0))
+        .map_err(|e| e.to_string())?;
+    if count > 0 {
+        return Ok(());
+    }
+    let rows: &[(&str, &str)] = &[
+        (
+            "日本",
+            "日本国是议会内阁制君主立宪国家：天皇是日本国及日本国民整体的象征，仅从事宪法规定的国事行为，不拥有统治权；国会（众议院·参议院）是国家的最高权力机关与唯一立法机关。法律体系属大陆法系成文法传统，现行《日本国宪法》1947年5月3日施行，确立国民主权、基本人权保障与和平主义三大原则；法令按法律、政令、省令等层级发布，官方日文条文由 e-Gov 提供。",
+        ),
+        (
+            "美国",
+            "美利坚合众国是联邦制总统制共和国：联邦政府实行立法（国会两院）、行政（总统）、司法（联邦最高法院）三权分立与制衡，各州享有较大自治权。法律体系属普通法系，联邦成文法按主题汇编为《美国法典》（United States Code），现行宪法于1788年6月21日经各州批准生效，正文7条并附27条修正案，是联邦最高法；官方英文条文由 govinfo / constitutioncenter 提供。",
+        ),
+        (
+            "中国",
+            "中华人民共和国是社会主义国家，实行人民民主专政与人民代表大会制度：全国人民代表大会是最高国家权力机关，国务院即中央人民政府。法律体系为成文法（大陆法系传统），以宪法为根本法，法律、行政法规、地方性法规等分层立法。当前应用内置《民法典》等示例条文供演示，中文全量法库列入 0.7.0 计划。",
+        ),
+    ];
+    for (c, intro) in rows {
+        conn.execute(
+            "INSERT INTO country_intro(country, intro) VALUES (?1, ?2)",
+            rusqlite::params![c, intro],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// 赛事版：整部法元信息（重点法双语名 / 法律领域 / 简介），仅当表空播种；
+/// 后续数据导入 / 更新不受影响（不覆盖已有行）。
+fn seed_laws_meta_if_empty(conn: &Connection) -> Result<(), String> {
+    let count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM laws_meta", [], |r| r.get(0))
+        .map_err(|e| e.to_string())?;
+    if count > 0 {
+        return Ok(());
+    }
+    // (title, country, domain, name_zh, name_orig, intro)
+    let rows: &[(&str, &str, &str, &str, Option<&str>, Option<&str>)] = &[
+        (
+            "日本国憲法",
+            "日本",
+            "宪法·国家法",
+            "日本国宪法",
+            None,
+            Some("1947年5月3日施行的日本现行宪法，共11章103条（另附前文），确立国民主权、尊重基本人权与和平主义三大原则，第九条宣示放弃战争。库内条文为 e-Gov 官方日文原文。"),
+        ),
+        ("民法", "日本", "民法", "日本民法典", None, None),
+        ("刑法", "日本", "刑法", "日本刑法", None, None),
+        ("会社法", "日本", "商法·公司法", "日本公司法", None, None),
+        ("商法", "日本", "商法", "日本商法", None, None),
+        ("労働基準法", "日本", "劳动与社会保障法", "日本劳动基准法", None, None),
+        ("著作権法", "日本", "知识产权法", "日本著作权法", None, None),
+        ("民事訴訟法", "日本", "民事程序法", "日本民事诉讼法", None, None),
+        ("刑事訴訟法", "日本", "刑事程序法", "日本刑事诉讼法", None, None),
+        (
+            "美利坚合众国宪法",
+            "美国",
+            "宪法",
+            "美利坚合众国宪法",
+            Some("Constitution of the United States"),
+            Some("1788年6月21日经各州批准生效的美国联邦最高法：正文7条确立三权分立与联邦制（Article I–VII），并附27条修正案（Amendment I–XXVII）。库内条文为 constitutioncenter.org 英文原文。"),
+        ),
+        (
+            "美国法典 Title 42 — 公共卫生与福利",
+            "美国",
+            "卫生与社会保障法",
+            "美国法典 Title 42 — 公共卫生与福利",
+            Some("Title 42 — The Public Health and Welfare"),
+            None,
+        ),
+        (
+            "美国法典 Title 15 — 商业与贸易",
+            "美国",
+            "商法·贸易法",
+            "美国法典 Title 15 — 商业与贸易",
+            Some("Title 15 — Commerce and Trade"),
+            None,
+        ),
+        (
+            "美国法典 Title 10 — 武装力量",
+            "美国",
+            "国防法",
+            "美国法典 Title 10 — 武装力量",
+            Some("Title 10 — Armed Forces"),
+            None,
+        ),
+        (
+            "美国法典 Title 26 — 国内税收法典",
+            "美国",
+            "税法",
+            "美国法典 Title 26 — 国内税收法典",
+            Some("Title 26 — Internal Revenue Code"),
+            None,
+        ),
+        (
+            "美国法典 Title 7 — 农业",
+            "美国",
+            "农业法",
+            "美国法典 Title 7 — 农业",
+            Some("Title 7 — Agriculture"),
+            None,
+        ),
+        (
+            "美国法典 Title 16 — 自然资源保护",
+            "美国",
+            "环境与自然资源法",
+            "美国法典 Title 16 — 自然资源保护",
+            Some("Title 16 — Conservation"),
+            None,
+        ),
+        (
+            "中华人民共和国民法典",
+            "中国",
+            "民法",
+            "中华人民共和国民法典",
+            None,
+            Some("2021年1月1日起施行的《中华人民共和国民法典》，共7编1260条，覆盖总则、物权、合同、人格权、婚姻家庭、继承与侵权责任。应用内置库仅收录其中6条示例条文。"),
+        ),
+    ];
+    for (title, country, domain, name_zh, name_orig, intro) in rows {
+        conn.execute(
+            "INSERT INTO laws_meta(title, country, domain, name_zh, name_orig, intro)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            rusqlite::params![title, country, domain, name_zh, name_orig, intro],
         )
         .map_err(|e| e.to_string())?;
     }

@@ -152,10 +152,13 @@ fn laws_search(
     let c = conn.lock().unwrap();
     let country_cond = country_where(&country, "laws_country");
 
-    // FTS5 优先（关键词 ≥3 个字符），任何异常静默回退 LIKE
+    // FTS5 优先（关键词 ≥3 个字符），任何异常静默回退 LIKE；
+    // FTS 无命中时也回退 LIKE——中文关键词可能只命中 title_zh/content_zh/整部法中文译名
     if kw.chars().count() >= 3 && db::fts_ready(&c) {
         if let Ok(out) = fts_run(&c, kw, country.as_deref(), &country_cond) {
-            return Ok(out);
+            if !out.is_empty() {
+                return Ok(out);
+            }
         }
     }
     like_run(&c, kw, country.as_deref(), &country_cond)
@@ -175,9 +178,11 @@ fn fts_run(
     };
     let sql = format!(
         "SELECT * FROM (
-           SELECT l.id, l.title, l.chapter, l.article_no, l.content, l.source, {} AS laws_country
+           SELECT l.id, l.title, l.chapter, l.article_no, l.content, l.source,
+                  COALESCE(l.title_zh, m.title_zh) AS title_zh, {} AS laws_country
            FROM (SELECT rowid AS rid FROM laws_fts WHERE laws_fts MATCH ?1 ORDER BY rank LIMIT 300) f
            JOIN laws l ON l.id = f.rid
+           LEFT JOIN laws_meta m ON m.title = l.title
          ) {} LIMIT 500",
         country_sql(),
         cond_part
@@ -191,6 +196,7 @@ fn fts_run(
             "article_no": r.get::<_, Option<String>>(3)?,
             "content": r.get::<_, String>(4)?,
             "source": r.get::<_, Option<String>>(5)?,
+            "title_zh": r.get::<_, Option<String>>(6)?,
         }))
     };
     let out: Vec<Value> = if country_cond.is_empty() {
@@ -208,7 +214,9 @@ fn fts_run(
     Ok(out)
 }
 
-/// LIKE 回退路径（FTS 不可用或查询报错时使用）
+/// LIKE 回退路径（FTS 不可用、查询报错或 FTS 无命中时使用）。
+/// 赛事版：同时匹配 title_zh / content_zh / 整部法元信息中的中文译名（laws_meta.name_zh / name_orig），
+/// 使“中文输入检索”（如输入“宪法”“民法典”）也能命中外法。
 fn like_run(
     c: &rusqlite::Connection,
     kw: &str,
@@ -216,14 +224,24 @@ fn like_run(
     country_cond: &str,
 ) -> Result<Vec<Value>, String> {
     let like = format!("%{kw}%");
-    let mut sql = format!(
-        "SELECT id, title, chapter, article_no, content, source FROM (
-           SELECT id, title, chapter, article_no, content, source, {} AS laws_country FROM laws
-         ) WHERE (title LIKE ?1 OR content LIKE ?1 OR article_no LIKE ?1) ",
-        country_sql()
+    let cond_part = if country_cond.is_empty() {
+        String::new()
+    } else {
+        "WHERE laws_country = ?2".to_string()
+    };
+    let sql = format!(
+        "SELECT id, title, chapter, article_no, content, source, title_zh FROM (
+           SELECT l.id, l.title, l.chapter, l.article_no, l.content, l.source,
+                  COALESCE(l.title_zh, m.title_zh) AS title_zh,
+                  {} AS laws_country
+           FROM laws l LEFT JOIN laws_meta m ON m.title = l.title
+           WHERE (l.title LIKE ?1 OR l.content LIKE ?1 OR l.article_no LIKE ?1
+                  OR l.title_zh LIKE ?1 OR l.content_zh LIKE ?1
+                  OR m.name_zh LIKE ?1 OR m.name_orig LIKE ?1)
+         ) {} ORDER BY title LIMIT 500",
+        country_sql(),
+        cond_part
     );
-    sql.push_str(country_cond);
-    sql.push_str(" ORDER BY title LIMIT 500");
     let mut stmt = c.prepare(&sql).map_err(|e| e.to_string())?;
     let mapper = |r: &rusqlite::Row| {
         Ok(json!({
@@ -233,9 +251,10 @@ fn like_run(
             "article_no": r.get::<_, Option<String>>(3)?,
             "content": r.get::<_, String>(4)?,
             "source": r.get::<_, Option<String>>(5)?,
+            "title_zh": r.get::<_, Option<String>>(6)?,
         }))
     };
-    let out: Vec<Value> = if country_cond.is_empty() {
+    let out: Vec<Value> = if cond_part.is_empty() {
         stmt.query_map([&like], mapper)
             .map_err(|e| e.to_string())?
             .collect::<Result<Vec<_>, _>>()
@@ -274,7 +293,7 @@ fn laws_countries(conn: State<'_, DbState>) -> Result<Vec<Value>, String> {
     rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
 }
 
-/// 某国家下按条文数排序的重点法规预览（前 8 部，标题 + 条文数）
+/// 某国家下按条文数排序的重点法规预览（前 8 部，标题 + 条文数 + 中文译名）
 #[tauri::command]
 fn laws_country_preview(
     conn: State<'_, DbState>,
@@ -288,16 +307,24 @@ fn laws_country_preview(
         "WHERE laws_country = ?1".to_string()
     };
     let sql = format!(
-        "SELECT title, COUNT(*) AS n FROM (
-           SELECT title, {} AS laws_country FROM laws
+        "SELECT title, n, title_zh FROM (
+           SELECT l.title AS title, COUNT(*) AS n,
+                  MAX(COALESCE(l.title_zh, m.title_zh)) AS title_zh,
+                  {} AS laws_country
+           FROM laws l LEFT JOIN laws_meta m ON m.title = l.title
+           GROUP BY l.title
          ) {}
-         GROUP BY title ORDER BY n DESC, title LIMIT 8",
+         ORDER BY n DESC, title LIMIT 8",
         country_sql(),
         where_part
     );
     let mut stmt = c.prepare(&sql).map_err(|e| e.to_string())?;
     let mapper = |r: &rusqlite::Row| {
-        Ok(json!({ "title": r.get::<_, String>(0)?, "articles": r.get::<_, i64>(1)? }))
+        Ok(json!({
+            "title": r.get::<_, String>(0)?,
+            "articles": r.get::<_, i64>(1)?,
+            "title_zh": r.get::<_, Option<String>>(2)?,
+        }))
     };
     let out: Vec<Value> = if where_part.is_empty() {
         stmt.query_map([], mapper)
@@ -312,6 +339,149 @@ fn laws_country_preview(
             .map_err(|e| e.to_string())?
     };
     Ok(out)
+}
+
+/// 赛事版：国家专属页数据——顶部国家概览（政体/国体/法律体系）＋按法律领域分组的法律列表。
+/// country：日本 / 美国 / 中国。返回 { country, rows, intro, groups:[{ domain, laws:[{title,title_zh,articles}] }] }。
+#[tauri::command]
+fn laws_country_home(conn: State<'_, DbState>, country: String) -> Result<Value, String> {
+    let c = conn.lock().unwrap();
+    let intro: Option<String> = c
+        .query_row(
+            "SELECT intro FROM country_intro WHERE country = ?1",
+            [&country],
+            |r| r.get(0),
+        )
+        .ok();
+    let rows: i64 = c
+        .query_row(
+            &format!("SELECT COUNT(*) FROM laws WHERE {} = ?1", country_sql()),
+            [&country],
+            |r| r.get(0),
+        )
+        .map_err(|e| format!("统计国家条数失败：{e}"))?;
+    let sql = format!(
+        "SELECT title, n, title_zh, d FROM (
+           SELECT l.title AS title, COUNT(*) AS n,
+                  MAX(COALESCE(l.title_zh, m.title_zh)) AS title_zh,
+                  COALESCE(m.domain, '未分类') AS d,
+                  {} AS laws_country
+           FROM laws l LEFT JOIN laws_meta m ON m.title = l.title
+           GROUP BY l.title
+         ) WHERE laws_country = ?1 ORDER BY n DESC, title LIMIT 600",
+        country_sql()
+    );
+    let mut stmt = c.prepare(&sql).map_err(|e| e.to_string())?;
+    let item = |r: &rusqlite::Row| {
+        Ok(json!({
+            "title": r.get::<_, String>(0)?,
+            "articles": r.get::<_, i64>(1)?,
+            "title_zh": r.get::<_, Option<String>>(2)?,
+            "domain": r.get::<_, String>(3)?,
+        }))
+    };
+    let list: Vec<Value> = stmt
+        .query_map([&country], item)
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+
+    // 按领域分组（未分类排最后），域内按条数降序
+    let mut order: Vec<String> = Vec::new();
+    let mut map: std::collections::HashMap<String, Vec<Value>> = std::collections::HashMap::new();
+    for v in list {
+        let d = v["domain"].as_str().unwrap_or("未分类").to_string();
+        if !map.contains_key(&d) {
+            order.push(d.clone());
+        }
+        map.entry(d).or_default().push(v);
+    }
+    if let Some(pos) = order.iter().position(|d| d == "未分类") {
+        let d = order.remove(pos);
+        order.push(d);
+    }
+    let groups: Vec<Value> = order
+        .into_iter()
+        .filter_map(|d| {
+            let laws = map.remove(&d)?;
+            Some(json!({ "domain": d, "laws": laws }))
+        })
+        .collect();
+    Ok(json!({
+        "country": country,
+        "rows": rows,
+        "intro": intro,
+        "groups": groups,
+    }))
+}
+
+/// 赛事版：整部法浏览——元信息（双语名/领域/简介）+ 按条文顺序的完整条文。
+/// 条文默认原文；content_zh 非空时前端提供“查看译文”切换。
+#[tauri::command]
+fn law_page(conn: State<'_, DbState>, title: String) -> Result<Value, String> {
+    let c = conn.lock().unwrap();
+    let meta = c
+        .query_row(
+            "SELECT country, domain, name_zh, name_orig, intro FROM laws_meta WHERE title = ?1",
+            [&title],
+            |r| {
+                Ok((
+                    r.get::<_, Option<String>>(0)?,
+                    r.get::<_, Option<String>>(1)?,
+                    r.get::<_, Option<String>>(2)?,
+                    r.get::<_, Option<String>>(3)?,
+                    r.get::<_, Option<String>>(4)?,
+                ))
+            },
+        )
+        .ok();
+    let country = c
+        .query_row(
+            &format!("SELECT {} FROM laws WHERE title = ?1 LIMIT 1", country_sql()),
+            [&title],
+            |r| r.get::<_, String>(0),
+        )
+        .unwrap_or_else(|_| "其他".to_string());
+    let article_count: i64 = c
+        .query_row(
+            "SELECT COUNT(*) FROM laws WHERE title = ?1",
+            [&title],
+            |r| r.get(0),
+        )
+        .unwrap_or(0);
+    let mut stmt = c
+        .prepare(
+            "SELECT id, chapter, article_no, content, content_zh, source
+             FROM laws WHERE title = ?1 ORDER BY id LIMIT 8000",
+        )
+        .map_err(|e| e.to_string())?;
+    let articles: Vec<Value> = stmt
+        .query_map([&title], |r| {
+            Ok(json!({
+                "id": r.get::<_, i64>(0)?,
+                "chapter": r.get::<_, Option<String>>(1)?,
+                "article_no": r.get::<_, Option<String>>(2)?,
+                "content": r.get::<_, String>(3)?,
+                "content_zh": r.get::<_, Option<String>>(4)?,
+                "source": r.get::<_, Option<String>>(5)?,
+            }))
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    let (name_zh, name_orig, domain, intro) = meta
+        .map(|(_c2, d, nz, no, it)| (nz, no, d, it))
+        .unwrap_or((None, None, None, None));
+    Ok(json!({
+        "title": title,
+        "country": country,
+        "name_zh": name_zh,
+        "name_orig": name_orig,
+        "domain": domain,
+        "intro": intro,
+        "article_count": article_count,
+        "articles": articles,
+    }))
 }
 
 // ---------------------------------------------------------------------------
@@ -632,15 +802,24 @@ fn import_excel(conn: State<'_, DbState>, kind: String, path: String) -> Result<
             let chapter = col("chapter").or_else(|| col("章节")).and_then(|i| row.get(i)).and_then(cell_str);
             let article_no = col("article_no").or_else(|| col("条文号")).and_then(|i| row.get(i)).and_then(cell_str);
             let source = col("source").or_else(|| col("来源")).and_then(|i| row.get(i)).and_then(cell_str);
+            // 赛事版：可选的中文译名 / 条文中文译文列（Excel 可空）
+            let title_zh = col("title_zh").or_else(|| col("中文标题")).or_else(|| col("中文译名"))
+                .and_then(|i| row.get(i)).and_then(cell_str)
+                .map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+            let content_zh = col("content_zh").or_else(|| col("译文")).or_else(|| col("中文内容"))
+                .and_then(|i| row.get(i)).and_then(cell_str)
+                .map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
             c.execute(
-                "INSERT INTO laws(title, chapter, article_no, content, source)
-                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                "INSERT INTO laws(title, chapter, article_no, content, source, title_zh, content_zh)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
                 rusqlite::params![
                     title,
                     chapter,
                     article_no,
                     content,
-                    source.unwrap_or_else(|| "Excel 导入".into())
+                    source.unwrap_or_else(|| "Excel 导入".into()),
+                    title_zh,
+                    content_zh
                 ],
             )
             .map_err(|e| e.to_string())?;
@@ -1098,6 +1277,9 @@ pub fn run() {
             laws_count,
             laws_countries,
             laws_country_preview,
+            // 赛事版：国家页概览（政体/法律体系 + 领域分组）与整部法浏览
+            laws_country_home,
+            law_page,
             templates_list,
             templates_create,
             templates_delete,
