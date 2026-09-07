@@ -288,11 +288,14 @@ async function fillSettings() {
   syncGrabButtons();
 }
 
-// 抓取模式切换（选中态强对比 + 说明文字）
+// 抓取模式切换（选中态强对比 + 说明文字）；主面板快捷按钮与「设置」抽屉按钮同步
 function syncGrabButtons() {
   const auto = pendingGrabMode !== 'manual';
   $('grabAuto').classList.toggle('active', auto);
   $('grabManual').classList.toggle('active', !auto);
+  const qa = $('qAuto'), qm = $('qManual');
+  if (qa) qa.classList.toggle('active', auto);
+  if (qm) qm.classList.toggle('active', !auto);
   $('grabHint').textContent = auto
     ? '🔄 自动模式：鼠标选中文字松开即自动抓取并弹出面板'
     : '✋ 手动模式：不主动抓取，把选中的文字拖到悬浮球或本窗口内即可';
@@ -308,8 +311,14 @@ async function applyGrabModeLive(mode) {
     setStatus('模式切换失败：' + (e.message || e));
   }
 }
-$('grabAuto').addEventListener('click', () => { if (pendingGrabMode !== 'auto') applyGrabModeLive('auto'); });
-$('grabManual').addEventListener('click', () => { if (pendingGrabMode !== 'manual') applyGrabModeLive('manual'); });
+function bindGrabMode(id, mode) {
+  const el = $(id);
+  if (el) el.addEventListener('click', () => { if (pendingGrabMode !== mode) applyGrabModeLive(mode); });
+}
+bindGrabMode('grabAuto', 'auto');
+bindGrabMode('grabManual', 'manual');
+bindGrabMode('qAuto', 'auto');
+bindGrabMode('qManual', 'manual');
 
 // 选择平台自动填充
 $('cfgProvider').addEventListener('change', () => {

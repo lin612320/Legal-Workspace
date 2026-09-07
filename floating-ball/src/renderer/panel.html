@@ -140,6 +140,20 @@
   }
   .grab-hint { font-size:11px; color:var(--muted); line-height:1.5; min-height:16px; }
 
+  /* 主面板快捷抓取切换 */
+  .grab-quick { display:flex; align-items:center; padding:0 2px; }
+  .grab-q {
+    flex:0 0 auto; padding:7px 12px; border-radius:10px; cursor:pointer;
+    border:1.5px solid var(--border); background:var(--input-bg); color:var(--muted);
+    font-size:12.5px; font-weight:500; transition:all .15s; white-space:nowrap;
+  }
+  .grab-q:hover { color:var(--text); border-color:var(--accent); }
+  .grab-q.active {
+    color:#fff; font-weight:700;
+    background:linear-gradient(135deg, var(--accent), #7c5cff);
+    border-color:var(--accent);
+  }
+
   /* 文本拖入面板提示 */
   body.drop-active::after {
     content: '松开以放入文本';
@@ -193,6 +207,13 @@
       </select>
       <button class="btn relate" id="btnRelate" title="预留数据库关联">关联</button>
       <button class="btn" id="btnAsk">询问</button>
+    </div>
+
+    <!-- 抓取模式快捷切换（与「设置」抽屉同步）：自动抓取 / 手动拖入 -->
+    <div class="row grab-quick" style="gap:6px;">
+      <span style="font-size:12px;color:var(--muted);white-space:nowrap;">抓取</span>
+      <button type="button" class="grab-q" id="qAuto">🔄 自动抓取</button>
+      <button type="button" class="grab-q" id="qManual">✋ 手动拖入</button>
     </div>
 
     <div class="result-wrap">
