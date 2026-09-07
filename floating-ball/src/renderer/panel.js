@@ -4,6 +4,8 @@ let taskId = 0; let running = false; let buffer = '';
 let cfgCache = null;
 let recordingHotkey = false;
 let pendingHotkey = '';
+let pendingGrabMode = 'auto'; // 抓取模式（auto=自动抓取 / manual=手动拖入）；须在模块级声明，
+// 否则“未打开设置抽屉时直接点主面板快捷切换”会抛 ReferenceError 而无反应。
 
 // ---- 主题应用 ----
 const THEMES = {
@@ -427,6 +429,8 @@ window.addEventListener('drop', (e) => {
 (async function init() {
   const { config } = await window.api.getState();
   cfgCache = config;
+  pendingGrabMode = config.grabMode === 'manual' ? 'manual' : 'auto';
+  syncGrabButtons(); // 让主面板快捷按钮一打开就显示当前抓取模式
   applyTheme(THEMES[config.theme || 'dark']);
   if (!config.ai.apiKey) setStatus('未配置 API Key，请点 ⚙ 填写');
 })();
