@@ -7,6 +7,9 @@ export interface Law {
   article_no: string | null;
   content: string;
   source: string | null;
+  /** 赛事版：条文中文译名 / 译文（Excel 导入时可填；缺省为 null） */
+  title_zh?: string | null;
+  content_zh?: string | null;
 }
 
 export const SAMPLE_LAWS: Law[] = [

@@ -2,6 +2,7 @@ import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
 import Layout from "./components/Layout";
 import Home from "./views/Home";
 import Laws from "./views/Laws";
+import LawBrowse from "./views/LawBrowse";
 import Templates from "./views/Templates";
 import Assistant from "./views/Assistant";
 import Agent from "./views/Agent";
@@ -19,6 +20,7 @@ export default function App() {
           <Route index element={<Navigate to="/home" replace />} />
           <Route path="/home" element={<Home />} />
           <Route path="/laws" element={<Laws />} />
+          <Route path="/law/:title" element={<LawBrowse />} />
           <Route path="/templates" element={<Templates />} />
           <Route path="/assistant" element={<Assistant />} />
           <Route path="/agent" element={<Agent />} />

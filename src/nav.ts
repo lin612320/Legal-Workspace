@@ -23,6 +23,10 @@ export const NAV_ITEMS: NavItem[] = [
 /** 根据当前路径取出版块标题，用于顶部栏 */
 export function useCurrentPage() {
   const { pathname } = useLocation();
+  // 赛事版：/law/:title 属于“法规查询”版块
+  if (pathname === "/law" || pathname.startsWith("/law/")) {
+    return NAV_ITEMS.find((it) => it.key === "laws") ?? NAV_ITEMS[0];
+  }
   return (
     NAV_ITEMS.find((it) => it.path === pathname) ?? { key: "home", label: "首页总览", path: "/home" }
   );
