@@ -11,10 +11,10 @@ export default function Settings() {
     <div className="settings-page">
       {!s.loaded && <p className="muted">加载中…</p>}
 
-      {/* AI 接口配置（AI 问答 / 文书智能体共用） */}
+      {/* AI 接口配置（文书智能体 / 翻译共用） */}
       <section className="card">
-        <h3>AI 接口配置（AI 问答 / 文书智能体共用）</h3>
-        <p className="muted hint">OpenAI 兼容接口，供「AI 问答」对话与「文书智能体」规划/执行使用。留空则两者均不可用。</p>
+        <h3>AI 接口配置（文书智能体 / 翻译共用）</h3>
+        <p className="muted hint">OpenAI 兼容接口，供「文书智能体」规划/执行与翻译使用。留空则智能体进入演示模式（翻译不可用）。</p>
         <div className="form-grid">
           <label>
             <span>接口地址 base_url</span>

@@ -94,7 +94,7 @@ export default function Home() {
           </div>
           {docs.length === 0 ? (
             <p className="muted">
-              暂无文书。用「文书智能体」把委托做成审查意见书 / 起诉状 / 质证意见后，会展示在这里（也可从「AI 问答」点「📄 生成文书任务」转交）。
+              暂无文书。用「文书智能体」把委托做成审查意见书 / 起诉状 / 质证意见后，会展示在这里。
             </p>
           ) : (
             <ul className="mini-docs">

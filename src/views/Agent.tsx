@@ -646,7 +646,7 @@ export default function Agent() {
       setContext(d.text.trim());
       setMsg({
         type: "ok",
-        text: "已从「AI 问答」接收转交内容（可增补材料后点击「制定计划」生成交付文书）",
+        text: "已接收转交的任务材料（可增补后点击「制定计划」生成交付文书）",
       });
     } catch {
       /* ignore */
@@ -660,7 +660,7 @@ export default function Agent() {
         <h3 style={{ marginTop: 0 }}>文书智能体「小元」 · 法律任务交付</h3>
         <p className="muted hint" style={{ marginTop: 0 }}>
           小元是法元的文书智能体人设，负责<b>端到端任务交付</b>：把合同 / 案情交给它 → 计划卡 → 自主调用本地法库工具 → 交付可打开的 .docx。
-          与「AI 问答」互补：问答给即时分析与建议，小元把委托做成可溯源、可验收的文书成果。模型配置见「数据设置」；未配置时为演示模式（工具仍真实执行）。
+          小元把委托做成可溯源、可验收的文书成果。模型配置见「数据设置」；未配置时为演示模式（工具仍真实执行）。
         </p>
         <div className="mode-chips">
           {TASK_KINDS.map((k) => (
