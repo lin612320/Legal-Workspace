@@ -165,18 +165,32 @@ function registerIpc() {
     }
   });
 
-  // 悬浮球拖动：主进程轮询光标移动窗口（不受窗口边界限制，可随意拖动）
+  // 悬浮球拖动：主进程轮询光标移动窗口（可跨越窗口边界）。
+  // 修复：位移以“起始位置 + 光标增量”计算（不做累计叠加），并钳制在主屏工作区内，
+  // 避免拖拽过程出现漂移 / 越拖越偏 / 拖出屏外后“异常放大”等观感问题。
   ipcMain.on('ball:start-drag', () => {
     const ball = windows.getBall();
     if (!ball || ball.isDestroyed()) return;
     // 拖动时隐藏对话气泡（按需求：拖动不弹对话）
     windows.hideBubble();
+    if (dragTimer) { clearInterval(dragTimer); dragTimer = null; }
     const start = screen.getCursorScreenPoint();
-    const [bx, by] = ball.getPosition();
-    if (dragTimer) clearInterval(dragTimer);
+    const [baseX, baseY] = ball.getPosition();
+    const size = 56; // 与 windows.js createBall 保持一致
+    const work = screen.getPrimaryDisplay().workArea;
+    const minX = work.x;
+    const minY = work.y;
+    const maxX = work.x + work.width - size;
+    const maxY = work.y + work.height - size;
     dragTimer = setInterval(() => {
+      if (ball.isDestroyed()) {
+        if (dragTimer) { clearInterval(dragTimer); dragTimer = null; }
+        return;
+      }
       const cur = screen.getCursorScreenPoint();
-      ball.setPosition(bx + cur.x - start.x, by + cur.y - start.y);
+      const nx = Math.max(minX, Math.min(baseX + (cur.x - start.x), maxX));
+      const ny = Math.max(minY, Math.min(baseY + (cur.y - start.y), maxY));
+      ball.setPosition(Math.round(nx), Math.round(ny));
     }, 16);
   });
   ipcMain.on('ball:stop-drag', () => {

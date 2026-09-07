@@ -70,7 +70,7 @@ window.addEventListener('mouseup', (e) => {
   if (!down || e.button !== 0) return;
   const dt = Date.now() - down.t;
   if (dragging) {
-    ball.classList.remove('dragging');
+    ball.classList.remove('dragging', 'drop-hover');
     if (window.ballApi) window.ballApi.stopDrag();
   } else if (dt < 400) {
     // 未拖动视为点击
@@ -79,6 +79,18 @@ window.addEventListener('mouseup', (e) => {
   down = null;
   dragging = false;
 });
+
+// 兜底清理：窗口失焦 / 拖拽中断时，确保不留 `dragging`/`drop-hover` 卡死态
+// （旧版若状态残留，球体会一直停留在放大/图标替换观感，重复拖拽后愈发明显）
+function clearBallState() {
+  if (!dragging && !down) return;
+  down = null;
+  dragging = false;
+  ball.classList.remove('dragging', 'drop-hover');
+  if (window.ballApi && typeof window.ballApi.stopDrag === 'function') window.ballApi.stopDrag();
+}
+window.addEventListener('blur', clearBallState);
+window.addEventListener('dragend', clearBallState);
 
 // ---- 文本拖入（手动抓取模式：把选中文字拖到球上）----
 ball.addEventListener('dragenter', (e) => {

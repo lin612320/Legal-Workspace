@@ -80,10 +80,19 @@ function inlineFmt(s) {
 function renderResult(appendCursor) {
   $('result').innerHTML = renderMarkdown(buffer) + (appendCursor ? '<span class="cursor"></span>' : '');
   $('result').scrollTop = $('result').scrollHeight;
+  updateResultButtons();
 }
 function setStatus(t) { $('status').textContent = t || ''; }
 function setRunning(v) {
   running = v; ['btnTranslate','btnAsk'].forEach((id) => ($(id).disabled = v));
+  updateResultButtons();
+}
+/** 结果区按钮态：空闲时不显示停止；无结果时隐藏复制/清空，避免输入区上方常驻一排图标 */
+function updateResultButtons() {
+  $('btnStop').style.display = running ? '' : 'none';
+  const hasText = buffer.trim().length > 0;
+  $('btnCopy').style.display = hasText ? '' : 'none';
+  $('btnClear').style.display = hasText ? '' : 'none';
 }
 
 // ---- AI 任务 ----
@@ -104,8 +113,26 @@ window.api.onTaskError(({ id, message }) => {
   buffer += `\n\n> 错误：${message}`; renderResult(false);
 });
 
+// 一键清空结果区
+$('btnClear').addEventListener('click', () => {
+  buffer = '';
+  if (running) {
+    // 进行中先停止，再清空
+    window.api.stopTask && window.api.stopTask();
+  }
+  setRunning(false);
+  setStatus('');
+  renderResult(false);
+});
+updateResultButtons();
+
 window.api.onSelectionResult((text) => {
-  if (text) { $('source').value = text; setStatus('已抓取选中文字'); }
+  if (text) {
+    $('source').value = text;
+    // 新的抓取/推送文本进来视为一次新任务，清掉上一轮结果，避免新旧结果混淆
+    if (buffer) { buffer = ''; renderResult(false); }
+    setStatus('已抓取选中文字');
+  }
   else setStatus('未抓取到文字（请先选中文本）');
 });
 window.api.onApplyTheme((theme) => applyTheme(theme));
