@@ -1,6 +1,6 @@
 import { useLocation } from "react-router-dom";
 
-/** 左侧导航的 10 个版块定义 */
+/** 左侧导航（赛事版：移除「AI 问答」「专注计时」） */
 export interface NavItem {
   key: string;
   label: string;
@@ -11,11 +11,9 @@ export const NAV_ITEMS: NavItem[] = [
   { key: "home", label: "首页总览", path: "/home" },
   { key: "laws", label: "法规查询", path: "/laws" },
   { key: "templates", label: "模板库", path: "/templates" },
-  { key: "assistant", label: "AI 问答", path: "/assistant" },
   { key: "agent", label: "文书智能体", path: "/agent" },
   { key: "translate", label: "翻译", path: "/translate" },
   { key: "todo", label: "待办提醒", path: "/todo" },
-  { key: "focus", label: "专注计时", path: "/focus" },
   { key: "settings", label: "数据设置", path: "/settings" },
   { key: "import", label: "数据导入", path: "/import" },
 ];
