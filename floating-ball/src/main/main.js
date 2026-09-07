@@ -191,6 +191,9 @@ function registerIpc() {
       const nx = Math.max(minX, Math.min(baseX + (cur.x - start.x), maxX));
       const ny = Math.max(minY, Math.min(baseY + (cur.y - start.y), maxY));
       ball.setPosition(Math.round(nx), Math.round(ny));
+      // 拖动过程中持续复核尺寸（防御 Windows 拖动/吸附改窗口大小导致的“越拖越大”）
+      const [cw, ch] = ball.getSize();
+      if (cw !== size || ch !== size) ball.setSize(size, size, false);
     }, 16);
   });
   ipcMain.on('ball:stop-drag', () => {

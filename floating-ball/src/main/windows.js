@@ -62,6 +62,18 @@ function createBall(config, onBallClick) {
   });
   ballWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   ballWin.setAlwaysOnTop(true, 'floating');
+  // 硬性锁定悬浮球窗口尺寸：最小 = 最大 = 56×56，
+  // 防止系统在拖动 / 靠边吸附（Aero Snap）等情况下把窗口改大（“越拖越大”）。
+  ballWin.setMinimumSize(size, size);
+  ballWin.setMaximumSize(size, size);
+  ballWin.setResizable(false);
+  const enforceBallSize = () => {
+    if (!ballWin || ballWin.isDestroyed()) return;
+    const [w, h] = ballWin.getSize();
+    if (w !== size || h !== size) ballWin.setSize(size, size, false);
+  };
+  ballWin.on('resize', enforceBallSize);
+  ballWin.on('resized', enforceBallSize);
   ballWin.loadFile(path.join(__dirname, '..', 'renderer', 'ball.html'));
   attachLog(ballWin, 'ball');
 
@@ -78,6 +90,7 @@ function createBall(config, onBallClick) {
   ballWin.on('moved', () => {
     const b = ballWin.getBounds();
     config.ballPos = { x: b.x, y: b.y };
+    enforceBallSize(); // 任何移动结束后都复核尺寸
   });
   ballWin._onBallClick = onBallClick;
   return ballWin;
