@@ -120,13 +120,17 @@ fn chat_history_save(
 /// 国家判定（按标题/来源特征推导；当前内置库均由 ETL 导入，命名与来源稳定）
 /// 中国：标题以“中华人民共和国”开头（内置示例）；美国：美国法典/美利坚标题或 govinfo/constitutioncenter 来源；
 /// 日本：来源 elaws.e-gov.go.jp；其余归为“其他”。
-fn country_sql() -> &'static str {
-    "CASE
-       WHEN title LIKE '美国法典%' OR title LIKE '美利坚合众国宪法%'
-            OR source LIKE '%constitutioncenter%' OR source LIKE '%govinfo%' THEN '美国'
-       WHEN title LIKE '中华人民共和国%' THEN '中国'
-       WHEN source LIKE '%e-gov.go.jp%' THEN '日本'
-       ELSE '其他' END"
+/// alias：SQL 中 laws 表的别名（如 "l" / "laws"），避免与 laws_meta 等表的 title 列产生歧义。
+fn country_sql(alias: &str) -> String {
+    format!(
+        "CASE
+           WHEN {a}.title LIKE '美国法典%' OR {a}.title LIKE '美利坚合众国宪法%'
+                OR {a}.source LIKE '%constitutioncenter%' OR {a}.source LIKE '%govinfo%' THEN '美国'
+           WHEN {a}.title LIKE '中华人民共和国%' THEN '中国'
+           WHEN {a}.source LIKE '%e-gov.go.jp%' THEN '日本'
+           ELSE '其他' END",
+        a = alias
+    )
 }
 
 fn country_where(country: &Option<String>, alias: &str) -> String {
@@ -179,12 +183,12 @@ fn fts_run(
     let sql = format!(
         "SELECT * FROM (
            SELECT l.id, l.title, l.chapter, l.article_no, l.content, l.source,
-                  COALESCE(l.title_zh, m.title_zh) AS title_zh, {} AS laws_country
+                  COALESCE(l.title_zh, m.name_zh) AS title_zh, {} AS laws_country
            FROM (SELECT rowid AS rid FROM laws_fts WHERE laws_fts MATCH ?1 ORDER BY rank LIMIT 300) f
            JOIN laws l ON l.id = f.rid
            LEFT JOIN laws_meta m ON m.title = l.title
          ) {} LIMIT 500",
-        country_sql(),
+        country_sql("l"),
         cond_part
     );
     let mut stmt = c.prepare(&sql).map_err(|e| e.to_string())?;
@@ -232,14 +236,14 @@ fn like_run(
     let sql = format!(
         "SELECT id, title, chapter, article_no, content, source, title_zh FROM (
            SELECT l.id, l.title, l.chapter, l.article_no, l.content, l.source,
-                  COALESCE(l.title_zh, m.title_zh) AS title_zh,
+                  COALESCE(l.title_zh, m.name_zh) AS title_zh,
                   {} AS laws_country
            FROM laws l LEFT JOIN laws_meta m ON m.title = l.title
            WHERE (l.title LIKE ?1 OR l.content LIKE ?1 OR l.article_no LIKE ?1
                   OR l.title_zh LIKE ?1 OR l.content_zh LIKE ?1
                   OR m.name_zh LIKE ?1 OR m.name_orig LIKE ?1)
          ) {} ORDER BY title LIMIT 500",
-        country_sql(),
+        country_sql("l"),
         cond_part
     );
     let mut stmt = c.prepare(&sql).map_err(|e| e.to_string())?;
@@ -280,7 +284,7 @@ fn laws_count(conn: State<'_, DbState>) -> Result<i64, String> {
 #[tauri::command]
 fn laws_countries(conn: State<'_, DbState>) -> Result<Vec<Value>, String> {
     let c = conn.lock().unwrap();
-    let sql = format!("SELECT {}, COUNT(*) AS rows FROM laws GROUP BY 1 ORDER BY 1", country_sql());
+    let sql = format!("SELECT {}, COUNT(*) AS rows FROM laws GROUP BY 1 ORDER BY 1", country_sql("laws"));
     let mut stmt = c.prepare(&sql).map_err(|e| e.to_string())?;
     let rows = stmt
         .query_map([], |r| {
@@ -309,13 +313,13 @@ fn laws_country_preview(
     let sql = format!(
         "SELECT title, n, title_zh FROM (
            SELECT l.title AS title, COUNT(*) AS n,
-                  MAX(COALESCE(l.title_zh, m.title_zh)) AS title_zh,
+                  MAX(COALESCE(l.title_zh, m.name_zh)) AS title_zh,
                   {} AS laws_country
            FROM laws l LEFT JOIN laws_meta m ON m.title = l.title
            GROUP BY l.title
          ) {}
          ORDER BY n DESC, title LIMIT 8",
-        country_sql(),
+        country_sql("l"),
         where_part
     );
     let mut stmt = c.prepare(&sql).map_err(|e| e.to_string())?;
@@ -355,7 +359,7 @@ fn laws_country_home(conn: State<'_, DbState>, country: String) -> Result<Value,
         .ok();
     let rows: i64 = c
         .query_row(
-            &format!("SELECT COUNT(*) FROM laws WHERE {} = ?1", country_sql()),
+            &format!("SELECT COUNT(*) FROM laws WHERE {} = ?1", country_sql("laws")),
             [&country],
             |r| r.get(0),
         )
@@ -363,13 +367,13 @@ fn laws_country_home(conn: State<'_, DbState>, country: String) -> Result<Value,
     let sql = format!(
         "SELECT title, n, title_zh, d FROM (
            SELECT l.title AS title, COUNT(*) AS n,
-                  MAX(COALESCE(l.title_zh, m.title_zh)) AS title_zh,
+                  MAX(COALESCE(l.title_zh, m.name_zh)) AS title_zh,
                   COALESCE(m.domain, '未分类') AS d,
                   {} AS laws_country
            FROM laws l LEFT JOIN laws_meta m ON m.title = l.title
            GROUP BY l.title
          ) WHERE laws_country = ?1 ORDER BY n DESC, title LIMIT 600",
-        country_sql()
+        country_sql("l")
     );
     let mut stmt = c.prepare(&sql).map_err(|e| e.to_string())?;
     let item = |r: &rusqlite::Row| {
@@ -437,7 +441,7 @@ fn law_page(conn: State<'_, DbState>, title: String) -> Result<Value, String> {
         .ok();
     let country = c
         .query_row(
-            &format!("SELECT {} FROM laws WHERE title = ?1 LIMIT 1", country_sql()),
+            &format!("SELECT {} FROM laws WHERE title = ?1 LIMIT 1", country_sql("laws")),
             [&title],
             |r| r.get::<_, String>(0),
         )
