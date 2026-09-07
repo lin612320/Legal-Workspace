@@ -158,14 +158,18 @@ function createPanel(config) {
     width: w, height: h,
     x: Math.max(8, workArea.x + 16),
     y: Math.round(workArea.y + (workArea.height - h) / 2),
-    frame: false, transparent: true, resizable: true,
-    minWidth: 320, minHeight: 360,
+    frame: false, transparent: true, resizable: false,
     alwaysOnTop: true, skipTaskbar: true, show: false,
     webPreferences: {
       preload: path.join(__dirname, '..', 'preload', 'panel-preload.js'),
       contextIsolation: true, nodeIntegration: false
     }
   });
+  // 面板尺寸固定（resizable:false + 最小=最大）：防止拖顶栏时被 Windows 当作
+  // “上边/边缘缩放”而每次拖拽都慢慢变大。
+  panelWin.setMinimumSize(w, h);
+  panelWin.setMaximumSize(w, h);
+  panelWin.setResizable(false);
   panelWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   panelWin.setAlwaysOnTop(true, 'floating');
   panelWin.loadFile(path.join(__dirname, '..', 'renderer', 'panel.html'));

@@ -209,12 +209,16 @@ function registerIpc() {
   });
   ipcMain.on('ball:leave', () => windows.hideBubble());
 
-  // 小窗顶栏拖动：按位移移动窗口
+  // 小窗顶栏拖动：按位移移动窗口（面板尺寸已固定，仅移动并钳制在主屏内，避免拖出后“找不回”）
   ipcMain.on('panel:move', (_e, { dx, dy }) => {
     const panel = windows.getPanel();
     if (!panel || panel.isDestroyed()) return;
     const [x, y] = panel.getPosition();
-    panel.setPosition(x + dx, y + dy);
+    const [pw, ph] = panel.getSize();
+    const wa = screen.getPrimaryDisplay().workArea;
+    const nx = Math.max(wa.x - pw + 80, Math.min(x + dx, wa.x + wa.width - 80));
+    const ny = Math.max(wa.y, Math.min(y + dy, wa.y + wa.height - 42));
+    panel.setPosition(Math.round(nx), Math.round(ny));
   });
 
   // 获取状态（配置 + 皮肤列表 + 主题列表）
