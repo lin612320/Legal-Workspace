@@ -312,6 +312,9 @@ fn migrate(conn: &Connection) -> Result<(), String> {
     seed_country_intro_if_empty(conn)?;
     seed_laws_meta_if_empty(conn)?;
 
+    // 赛事版：美国宪法官方中译（Preamble + Article I–VII）按 article_no 回填 content_zh（幂等，仅补空值）
+    enrich_us_constitution_zh(conn)?;
+
     // FTS5 建索引（幂等、失败静默回退 LIKE）；放播种之后，保证索引与数据一致
     let _ = ensure_laws_fts(conn);
 
@@ -561,6 +564,52 @@ fn seed_laws_meta_if_empty(conn: &Connection) -> Result<(), String> {
             "INSERT INTO laws_meta(title, country, domain, name_zh, name_orig, intro)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             rusqlite::params![title, country, domain, name_zh, name_orig, intro],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// 赛事版：把「美国宪法官方中译」按 article_no 回填到 `laws.content_zh`（仅当该行无译文时）。
+/// 数据源：`src-tauri/src/data/us_const_zh.json`（由《法库ETL工作区》对齐脚本从官方中译 PDF 生成，
+/// 覆盖 Preamble + Article I–VII 共 25 段，不含修正案）。通过 settings 键 `zh.us_const_done` 保证只执行一次。
+fn enrich_us_constitution_zh(conn: &Connection) -> Result<(), String> {
+    if let Some(v) = get_setting(conn, "zh.us_const_done").map_err(|e| e.to_string())? {
+        if !v.is_empty() {
+            return Ok(());
+        }
+    }
+    let json: &str = include_str!("data/us_const_zh.json");
+    let val: serde_json::Value = serde_json::from_str(json)
+        .map_err(|e| format!("解析 us_const_zh.json 失败：{e}"))?;
+    let Some(entries) = val.get("entries").and_then(|v| v.as_array()) else {
+        return Err("us_const_zh.json 缺少 entries".into());
+    };
+    let title = val
+        .get("title")
+        .and_then(|v| v.as_str())
+        .unwrap_or("美利坚合众国宪法");
+    let mut updated: usize = 0;
+    for ent in entries {
+        let no = ent.get("article_no").and_then(|v| v.as_str()).unwrap_or("");
+        let text = ent.get("text").and_then(|v| v.as_str()).unwrap_or("");
+        if no.is_empty() || text.is_empty() {
+            continue;
+        }
+        updated += conn
+            .execute(
+                "UPDATE laws SET content_zh = ?3
+                 WHERE title = ?1 AND article_no = ?2
+                   AND (content_zh IS NULL OR content_zh = '')",
+                rusqlite::params![title, no, text],
+            )
+            .map_err(|e| e.to_string())?;
+    }
+    if updated > 0 {
+        conn.execute(
+            "INSERT INTO settings(key, value) VALUES ('zh.us_const_done', '1')
+             ON CONFLICT(key) DO UPDATE SET value = '1'",
+            [],
         )
         .map_err(|e| e.to_string())?;
     }
