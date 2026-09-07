@@ -22,6 +22,27 @@ let bubbleWin = null;
 let skinPickerWin = null;
 let panelVisible = false;
 
+// 尺寸“看门狗”：任何途径（含系统/未知原因）把球或面板窗口改大，
+// 都在 800ms 内强制拉回各自的固定尺寸，彻底杜绝“越拖越大”。
+let sizeWatchdog = null;
+function ensureFixedSize(win) {
+  if (!win || win.isDestroyed() || win._fixedW == null || win._fixedH == null) return;
+  const [cw, ch] = win.getSize();
+  if (cw !== win._fixedW || ch !== win._fixedH) {
+    win.setSize(win._fixedW, win._fixedH, false);
+  }
+}
+function startSizeWatchdog() {
+  if (sizeWatchdog) return;
+  sizeWatchdog = setInterval(() => {
+    ensureFixedSize(ballWin);
+    ensureFixedSize(panelWin);
+  }, 800);
+}
+function stopSizeWatchdog() {
+  if (sizeWatchdog) { clearInterval(sizeWatchdog); sizeWatchdog = null; }
+}
+
 function getBall() { return ballWin; }
 function getPanel() { return panelWin; }
 function getBubble() { return bubbleWin; }
@@ -74,6 +95,9 @@ function createBall(config, onBallClick) {
   };
   ballWin.on('resize', enforceBallSize);
   ballWin.on('resized', enforceBallSize);
+  ballWin._fixedW = size;
+  ballWin._fixedH = size;
+  startSizeWatchdog();
   ballWin.loadFile(path.join(__dirname, '..', 'renderer', 'ball.html'));
   attachLog(ballWin, 'ball');
 
@@ -170,6 +194,17 @@ function createPanel(config) {
   panelWin.setMinimumSize(w, h);
   panelWin.setMaximumSize(w, h);
   panelWin.setResizable(false);
+  panelWin._fixedW = w;
+  panelWin._fixedH = h;
+  const enforcePanelSize = () => {
+    if (!panelWin || panelWin.isDestroyed()) return;
+    const [cw, ch] = panelWin.getSize();
+    if (cw !== w || ch !== h) panelWin.setSize(w, h, false);
+  };
+  panelWin.on('resize', enforcePanelSize);
+  panelWin.on('resized', enforcePanelSize);
+  panelWin.on('moved', enforcePanelSize);
+  startSizeWatchdog();
   panelWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   panelWin.setAlwaysOnTop(true, 'floating');
   panelWin.loadFile(path.join(__dirname, '..', 'renderer', 'panel.html'));
@@ -257,6 +292,7 @@ function sendToPanel(channel, payload) {
 }
 
 function destroyAll() {
+  stopSizeWatchdog();
   if (bubbleWin) bubbleWin.destroy();
   if (skinPickerWin) skinPickerWin.destroy();
   if (panelWin) panelWin.destroy();

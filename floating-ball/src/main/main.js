@@ -12,6 +12,10 @@ const { grabSelection } = require('./selection');
 const { runTask, normalizeBaseURL, httpFetchWithHint } = require('./ai');
 const hook = require('./hook');
 
+// 版本号（托盘悬浮提示可确认运行的是哪一版，便于排查“旧进程仍在跑”的假修复）
+let appVersion = '';
+try { appVersion = require('../../package.json').version || ''; } catch (e) { appVersion = ''; }
+
 // 共享桥接文件路径（%APPDATA%/floating-ball/to-workbench.json）
 const BRIDGE_DIR = path.join(os.homedir(), 'AppData', 'Roaming', 'floating-ball');
 const BRIDGE_FILE = path.join(BRIDGE_DIR, 'to-workbench.json');
@@ -138,7 +142,7 @@ function setupTray() {
     { type: 'separator' },
     { label: '退出', click: () => { quitApp(); } }
   ]);
-  tray.setToolTip('悬浮球助手');
+  tray.setToolTip(`悬浮球助手 ${appVersion}`);
   tray.setContextMenu(menu);
   // 托盘双击：显示悬浮球
   tray.on('double-click', () => windows.showBall(config));
