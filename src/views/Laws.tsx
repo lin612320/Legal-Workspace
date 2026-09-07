@@ -179,7 +179,10 @@ export default function Laws() {
               key={m}
               className={mode === m ? "primary small" : "ghost small"}
               style={{ marginRight: 8 }}
-              onClick={() => setMode(m)}
+              onClick={() => {
+                setMode(m);
+                if (m === "search") void loadPreview(country); // 首次进入检索模式时加载重点法规预览
+              }}
             >
               {label}
             </button>
