@@ -1,0 +1,388 @@
+/* ==========================================================================
+   知识图谱（KnowledgeGraph）
+   独立作用域样式：只在 .kg 下生效，不改动全局 src/styles.css。
+   颜色优先复用 styles.css 里的设计令牌（--brand / --surface / --border /
+   --text / --text-muted / --brand-soft / --brand-text），类型色用 --kg-*
+   在亮/暗主题下各给一套柔和色，保证可读且不刺眼。
+   ========================================================================== */
+
+.kg {
+  /* 类型色 —— 亮色主题 */
+  --kg-case: var(--brand);
+  --kg-element: #3d8b6a;
+  --kg-issue: #a9761a;
+  --kg-law: #2f6fb5;
+  --kg-evidence: #7a5cc4;
+  --kg-doc: #6b6b73;
+  /* 边与候选边 */
+  --kg-edge: #c2c2cd;
+  --kg-cand: #c79a3a;
+  --kg-glow: rgba(75, 63, 227, 0.32);
+  /* 人工确认 / 拒绝按钮 */
+  --kg-ok-bg: #ebf7ef;
+  --kg-ok-fg: #1e6b3c;
+  --kg-no-bg: #fdecea;
+  --kg-no-fg: #c0392b;
+}
+
+:root[data-theme="dark"] .kg {
+  --kg-element: #63b894;
+  --kg-issue: #d9a63f;
+  --kg-law: #6fa8e0;
+  --kg-evidence: #a98ce6;
+  --kg-doc: #9b9ba6;
+  --kg-edge: #4a4a58;
+  --kg-cand: #c9a04a;
+  --kg-glow: rgba(122, 108, 255, 0.45);
+  --kg-ok-bg: rgba(30, 107, 60, 0.3);
+  --kg-ok-fg: #7fd6a0;
+  --kg-no-bg: rgba(192, 57, 43, 0.24);
+  --kg-no-fg: #ff8a80;
+}
+
+/* ---------- 头部 ---------- */
+.kg-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.kg-head .kg-title {
+  margin: 0;
+  font-size: 15px;
+}
+
+.kg-meta {
+  font-size: 12px;
+}
+
+/* ---------- 画布 ---------- */
+.kg-canvas {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background-color: var(--surface);
+  background-image: radial-gradient(circle at 1px 1px, var(--border) 1px, transparent 0);
+  background-size: 22px 22px;
+  overflow: hidden;
+}
+
+.kg-svg {
+  display: block;
+  font-family: inherit;
+}
+
+.kg-layer-title {
+  fill: var(--text-muted);
+  font-size: 11px;
+  letter-spacing: 1px;
+  user-select: none;
+}
+
+/* ---------- 节点 ---------- */
+.kg-node {
+  cursor: pointer;
+  outline: none;
+  transition: opacity 0.15s ease;
+}
+
+.kg-node-box {
+  fill: var(--surface);
+  stroke: var(--border);
+  stroke-width: 1.2;
+  transition: stroke 0.15s ease, fill 0.15s ease;
+}
+
+.kg-node:hover .kg-node-box {
+  stroke: var(--brand);
+}
+
+.kg-node:focus-visible .kg-node-box {
+  stroke: var(--brand);
+  stroke-width: 2;
+}
+
+.kg-node-name {
+  fill: var(--text);
+  dominant-baseline: middle;
+  pointer-events: none;
+}
+
+.kg-node-conf {
+  fill: var(--text-muted);
+  font-size: 9.5px;
+  dominant-baseline: middle;
+  pointer-events: none;
+}
+
+.kg-node-dot {
+  stroke: var(--surface);
+  stroke-width: 1;
+  pointer-events: none;
+}
+
+.kg-node-dim {
+  opacity: 0.16;
+}
+
+.kg-node-focus .kg-node-box {
+  stroke: var(--brand);
+  stroke-width: 2.4;
+  filter: drop-shadow(0 0 6px var(--kg-glow));
+}
+
+.kg-node-sel .kg-node-box {
+  stroke: var(--brand);
+  stroke-width: 2.2;
+  fill: var(--brand-soft);
+}
+
+.kg-node-sel .kg-node-name {
+  fill: var(--brand-text);
+}
+
+/* ---------- 边 ---------- */
+.kg-edge-line {
+  fill: none;
+  stroke: var(--kg-edge);
+  stroke-linecap: round;
+  transition: opacity 0.15s ease;
+}
+
+.kg-edge-cand .kg-edge-line {
+  stroke: var(--kg-cand);
+}
+
+.kg-edge-rel {
+  fill: var(--text-muted);
+  font-size: 10px;
+  paint-order: stroke;
+  stroke: var(--surface);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.kg-arrow-edge {
+  fill: var(--kg-edge);
+}
+
+.kg-arrow-cand {
+  fill: var(--kg-cand);
+}
+
+.kg-arrow-hl {
+  fill: var(--brand);
+}
+
+.kg-arrow-dim {
+  fill: var(--kg-edge);
+}
+
+/* ---------- 候选边上的 ✓ / ✕ ---------- */
+.kg-act {
+  cursor: pointer;
+  outline: none;
+}
+
+.kg-act circle {
+  stroke-width: 1;
+  stroke-opacity: 0.4;
+}
+
+.kg-act-ok {
+  fill: var(--kg-ok-bg);
+  stroke: var(--kg-ok-fg);
+}
+
+.kg-act-no {
+  fill: var(--kg-no-bg);
+  stroke: var(--kg-no-fg);
+}
+
+.kg-act-text {
+  font-size: 11px;
+  dominant-baseline: middle;
+  text-anchor: middle;
+  pointer-events: none;
+}
+
+.kg-act-ok-text {
+  fill: var(--kg-ok-fg);
+}
+
+.kg-act-no-text {
+  fill: var(--kg-no-fg);
+  font-size: 10px;
+}
+
+.kg-act:hover circle,
+.kg-act:focus-visible circle {
+  stroke-width: 1.8;
+  stroke-opacity: 0.95;
+}
+
+/* ---------- 图例 ---------- */
+.kg-legend {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+  opacity: 0.94;
+  pointer-events: none;
+}
+
+.kg-legend-title {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.kg-legend-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px 12px;
+}
+
+.kg-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.kg-legend-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.kg-legend-dash {
+  width: 14px;
+  border-top: 1.5px dashed var(--kg-cand);
+  flex-shrink: 0;
+}
+
+/* ---------- 空状态 ---------- */
+.kg-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.kg-empty-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.kg-empty-hint {
+  font-size: 12px;
+}
+
+/* ---------- 下方信息条 ---------- */
+.kg-detail {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.kg-detail-hint {
+  margin: 0;
+}
+
+.kg-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.kg-detail-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.kg-detail-alt {
+  color: var(--text-muted);
+}
+
+.kg-detail-close {
+  margin-left: auto;
+  padding: 3px 10px;
+  font-size: 12px;
+}
+
+.kg-detail-note {
+  margin: 8px 0 0;
+  color: var(--text-muted);
+}
+
+.kg-detail-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 20px;
+  margin-top: 10px;
+}
+
+.kg-detail-col h4 {
+  margin: 0 0 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.kg-detail-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.kg-detail-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.kg-detail-rel {
+  color: var(--text-muted);
+}
+
+.kg-detail-arrow {
+  color: var(--text-muted);
+}
+
+@media (max-width: 720px) {
+  .kg-detail-cols {
+    grid-template-columns: 1fr;
+  }
+
+  .kg-legend-grid {
+    grid-template-columns: 1fr;
+  }
+}

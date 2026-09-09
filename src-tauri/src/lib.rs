@@ -4,6 +4,7 @@ mod ball;
 mod db;
 mod docx;
 mod keycrypt;
+mod office;
 
 use std::fs;
 use std::sync::Mutex;
@@ -833,6 +834,18 @@ fn import_excel(conn: State<'_, DbState>, kind: String, path: String) -> Result<
     Ok(json!({ "imported": imported, "skipped": skipped }))
 }
 
+/// 提取办公文档 / 图片材料的文本（docx / pptx / xlsx / txt / md / csv；pdf 与图片走模型）
+#[tauri::command]
+fn extract_material(path: String) -> Result<Value, String> {
+    let p = std::path::Path::new(&path);
+    if !p.exists() { return Err("文件不存在".into()); }
+    let e = office::extract_office_text(p)?;
+    Ok(json!({
+        "kind": e.kind, "text": e.text, "blocks": e.blocks,
+        "truncated": e.truncated, "note": e.note,
+    }))
+}
+
 // ---------------------------------------------------------------------------
 // 版块 1：最近文书 + 智能体交付物（documents / docx 导出）
 // ---------------------------------------------------------------------------
@@ -1081,6 +1094,125 @@ fn mem_list(conn: State<'_, DbState>, kind: Option<String>) -> Result<Vec<Value>
 }
 
 // ---------------------------------------------------------------------------
+// 0.7.0：知识图谱（kg_list / kg_query / kg_find_case / kg_confirm_edge / kg_add_candidate）
+// ---------------------------------------------------------------------------
+
+/// 全量图谱（可视化面板）
+#[tauri::command]
+fn kg_list(conn: State<'_, DbState>) -> Result<Value, String> {
+    db::kg_list(&conn.lock().unwrap())
+}
+
+/// 某案由的子图（2 跳内），供任务规划与高亮
+#[tauri::command]
+fn kg_query(conn: State<'_, DbState>, case_name: String) -> Result<Option<Value>, String> {
+    db::kg_query(&conn.lock().unwrap(), &case_name)
+}
+
+/// 按材料文本匹配案由（返回案由名，无法判断返回 null）
+#[tauri::command]
+fn kg_find_case(conn: State<'_, DbState>, text: String) -> Result<Option<String>, String> {
+    db::kg_find_case(&conn.lock().unwrap(), &text)
+}
+
+/// 人工确认 / 拒绝候选边（拒绝即删除）
+#[tauri::command]
+fn kg_confirm_edge(conn: State<'_, DbState>, id: i64, confirmed: bool) -> Result<(), String> {
+    db::kg_confirm_edge(&conn.lock().unwrap(), id, confirmed)
+}
+
+/// 任务命中法条 → 登记候选边（已存在返回 null）
+#[tauri::command]
+fn kg_add_candidate(
+    conn: State<'_, DbState>,
+    case_name: String,
+    law_title: String,
+    task_id: Option<i64>,
+) -> Result<Option<i64>, String> {
+    db::kg_add_candidate(&conn.lock().unwrap(), &case_name, &law_title, task_id)
+}
+
+// ---------------------------------------------------------------------------
+// 0.7.0：任务材料（attachment_add / attachments_list / attachment_delete /
+//        read_file_base64 —— 供 PDF / 图片走视觉模型解析）
+// ---------------------------------------------------------------------------
+
+#[tauri::command]
+fn attachment_add(
+    conn: State<'_, DbState>,
+    task_id: i64,
+    file_name: String,
+    file_path: String,
+    kind: Option<String>,
+    size_bytes: Option<i64>,
+    text: Option<String>,
+    blocks: Option<i64>,
+    truncated: bool,
+    note: Option<String>,
+) -> Result<i64, String> {
+    db::attachment_add(
+        &conn.lock().unwrap(),
+        task_id,
+        &file_name,
+        &file_path,
+        kind.as_deref(),
+        size_bytes,
+        text.as_deref(),
+        blocks,
+        truncated,
+        note.as_deref(),
+    )
+}
+
+#[tauri::command]
+fn attachments_list(conn: State<'_, DbState>, task_id: i64) -> Result<Vec<Value>, String> {
+    db::attachments_list(&conn.lock().unwrap(), task_id)
+}
+
+/// 拼接任务全部材料文本（载入历史任务时补回上下文用）
+#[tauri::command]
+fn attachments_text_all(conn: State<'_, DbState>, task_id: i64) -> Result<String, String> {
+    db::attachments_text(&conn.lock().unwrap(), task_id)
+}
+
+#[tauri::command]
+fn attachment_delete(conn: State<'_, DbState>, id: i64) -> Result<(), String> {
+    db::attachment_delete(&conn.lock().unwrap(), id)
+}
+
+/// 读取本地文件为 base64（供前端把 PDF / 图片交给支持文件/视觉输入的模型）。
+/// 大小上限 20 MB，防止把超大文件塞进请求。
+#[tauri::command]
+fn read_file_base64(path: String) -> Result<Value, String> {
+    let p = std::path::Path::new(&path);
+    if !p.exists() {
+        return Err("文件不存在".into());
+    }
+    let meta = std::fs::metadata(p).map_err(|e| format!("读取文件信息失败：{e}"))?;
+    if meta.len() > 20 * 1024 * 1024 {
+        return Err("文件超过 20 MB 上限，请压缩或拆分后再试".into());
+    }
+    let bytes = std::fs::read(p).map_err(|e| format!("读取文件失败：{e}"))?;
+    use base64::Engine as _;
+    let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+    let mime = match p
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|s| s.to_lowercase())
+        .as_deref()
+    {
+        Some("pdf") => "application/pdf",
+        Some("png") => "image/png",
+        Some("jpg") | Some("jpeg") => "image/jpeg",
+        Some("webp") => "image/webp",
+        Some("gif") => "image/gif",
+        Some("bmp") => "image/bmp",
+        _ => "application/octet-stream",
+    };
+    Ok(json!({ "mime": mime, "size": bytes.len(), "base64": b64 }))
+}
+
+// ---------------------------------------------------------------------------
 // 后台提醒：轮询待办，到期的发系统通知（每 30 秒一次）
 // ---------------------------------------------------------------------------
 
@@ -1297,6 +1429,8 @@ pub fn run() {
             float_in,
             float_out,
             import_excel,
+            // 任务材料文本提取（docx / pptx / xlsx / txt / md / csv；pdf 与图片走模型）
+            extract_material,
             // 智能体（数字员工）：文书交付物与任务状态机
             law_by_id,
             documents_list,
@@ -1313,6 +1447,18 @@ pub fn run() {
             task_artifact_add,
             mem_save,
             mem_list,
+            // 0.7.0：知识图谱
+            kg_list,
+            kg_query,
+            kg_find_case,
+            kg_confirm_edge,
+            kg_add_candidate,
+            // 0.7.0：任务材料（多模态导入）
+            attachment_add,
+            attachments_list,
+            attachments_text_all,
+            attachment_delete,
+            read_file_base64,
             // 交付物打开/定位（桌面）
             open_file,
             reveal_in_folder,

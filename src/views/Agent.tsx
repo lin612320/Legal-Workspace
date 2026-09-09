@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import {
   TASK_KINDS,
   LS_AGENT_HANDOFF,
+  isTaskKind,
   type TaskKind,
   type AgentTask,
   type AgentStep,
@@ -21,6 +22,27 @@ import { onBallPush } from "../lib/ball";
 import { openPathFile, revealPath } from "../lib/open";
 import type { AIConfig } from "../lib/ai";
 import type { LawRef } from "../lib/tools";
+import KnowledgeGraph from "../components/KnowledgeGraph";
+import {
+  addCandidateEdge,
+  confirmEdge,
+  loadKg,
+  queryKg,
+  type KgEdge,
+  type KgNode,
+} from "../lib/kg";
+import {
+  addAttachment,
+  baseNameOf,
+  deleteAttachment,
+  extractMaterial,
+  listAttachments,
+  mergeMaterialIntoContext,
+  needsModel,
+  type ExtractResult,
+  type Material,
+} from "../lib/materials";
+import { analyzeMaterialWithModel } from "../lib/multimodal";
 
 const SAMPLE_CONTRACT = `甲方（服务方）与乙方（委托方）签订《软件定制开发合同》。约定：合同总价 20 万元，乙方应在合同签订后 5 日内支付 60% 预付款，验收合格后支付 40% 尾款。交付期限为预付款到账后 60 个自然日。甲方逾期交付每日按合同总价 0.5% 支付违约金；乙方逾期付款每日按未付款项 0.3% 支付违约金。双方任何一方不得单方解除合同，违约方需赔偿守约方全部损失（含间接损失与律师费）。知识产权约定：开发成果著作权归乙方，但甲方保留通用组件使用权。争议由甲方所在地法院管辖。`;
 
@@ -141,6 +163,17 @@ export default function Agent() {
   const [delivering, setDelivering] = useState(false);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [lastDocPath, setLastDocPath] = useState<string | null>(null);
+  // 0.7.0：知识图谱视图（命中案由时展示子图并高亮案由节点；否则展示全量）
+  const [kgView, setKgView] = useState<{
+    nodes: KgNode[];
+    edges: KgEdge[];
+    focusId: number | null;
+  } | null>(null);
+  const [kgCase, setKgCase] = useState<string | null>(null);
+  // 0.7.0：多模态任务材料
+  const [materials, setMaterials] = useState<Material[]>([]);
+  const [matPath, setMatPath] = useState("");
+  const [matBusy, setMatBusy] = useState(false);
 
   const taskRef = useRef<AgentTask | null>(null);
   const runToken = useRef(0);
@@ -199,6 +232,8 @@ export default function Agent() {
         steps: plan.steps,
         artifacts: [],
         refs: [],
+        caseName: plan.caseName,
+        kgLawNames: plan.kgLawNames,
         created_at: new Date().toISOString(),
       };
       taskRef.current = t;
@@ -211,6 +246,12 @@ export default function Agent() {
             ? "未配置模型 → 演示模式：使用预设流水线，工具步骤真实执行"
             : "模型已规划任务步骤",
       });
+      if (plan.caseName) {
+        pushLog({ level: "info", text: `知识图谱：命中案由「${plan.caseName}」，已按要件骨架规划` });
+        setKgCase(plan.caseName);
+        const sub = await queryKg(plan.caseName);
+        if (sub) setKgView({ nodes: sub.nodes, edges: sub.edges, focusId: sub.root });
+      }
       setTask({ ...t, steps: [...t.steps] });
       // 桌面端落库（P1 状态机）
       await persistTask(t);
@@ -379,20 +420,23 @@ export default function Agent() {
       if (!hasFail) {
         pushLog({ level: "info", text: "任务完成，小元已生成交付物草稿（下方预览可编辑导出）" });
         void rememberTask(cfg, t);
+        void registerCandidates(t);
       }
     }
     setBusy(false);
     syncState();
   };
 
-  /** 从人工确认闸门继续 */
+  /** 从人工确认闸门继续：标记该步已放行，避免再次命中闸门造成死循环 */
   const resumeFromGate = async () => {
     const t = taskRef.current;
     if (!t || busy) return;
     const st = t.steps.find((x) => x.status === "waiting");
     if (st) {
+      st.confirmed = true;
       st.status = "pending";
       await syncStepStatus(st);
+      pushLog({ level: "gate", text: `人工确认通过：${st.name}` });
     }
     await runAll();
   };
@@ -403,6 +447,127 @@ export default function Agent() {
     setBusy(false);
     const t = taskRef.current;
     if (t) await setStatus(t, "paused");
+  };
+
+  /** 刷新图谱视图：all=true 看全量，false 回到命中案由子图 */
+  const refreshKg = async (all = false) => {
+    if (!isTauri()) return;
+    if (!all && kgCase) {
+      const sub = await queryKg(kgCase);
+      if (sub) {
+        setKgView({ nodes: sub.nodes, edges: sub.edges, focusId: sub.root });
+        return;
+      }
+    }
+    const g = await loadKg();
+    if (g) setKgView({ nodes: g.nodes, edges: g.edges, focusId: null });
+    if (all) setKgCase(null);
+  };
+
+  /** 人工确认 / 拒绝候选边 */
+  const handleKgEdge = async (edgeId: number, confirmed: boolean) => {
+    const ok = await confirmEdge(edgeId, confirmed);
+    if (!ok) {
+      setMsg({ type: "err", text: "图谱操作失败（浏览器预览模式不支持）。" });
+      return;
+    }
+    pushLog({
+      level: "info",
+      text: confirmed ? "知识图谱：已确认 1 条候选边" : "知识图谱：已拒绝 1 条候选边",
+    });
+    await refreshKg();
+  };
+
+  /** 任务完成后把本次真实命中的法条登记为候选边（低置信度，待人工确认） */
+  const registerCandidates = async (t: AgentTask) => {
+    if (!isTauri() || !t.caseName) return;
+    const titles = [...new Set(t.refs.map((r) => r.title))].filter(Boolean);
+    let added = 0;
+    for (const title of titles) {
+      const id = await addCandidateEdge(t.caseName, title, t.id);
+      if (id != null) added += 1;
+    }
+    if (added > 0) {
+      pushLog({ level: "info", text: `知识图谱：登记 ${added} 条候选边（虚线，待人工确认）` });
+      await refreshKg();
+    }
+  };
+
+  /** 导入材料（桌面版：Rust 提取文本 → 落库 → 并入任务材料） */
+  const importMaterial = async () => {
+    const p = matPath.trim();
+    if (!p || matBusy) return;
+    if (!isTauri()) {
+      setMsg({ type: "err", text: "材料导入仅桌面版可用（当前为浏览器预览）。" });
+      return;
+    }
+    setMatBusy(true);
+    try {
+      const ex = await extractMaterial(p);
+      if (!ex) {
+        setMsg({ type: "err", text: "提取失败：未返回结果（请确认文件存在且格式受支持）。" });
+        return;
+      }
+      const taskId = taskRef.current?.id ?? 0;
+      const name = baseNameOf(p);
+      // PDF / 图片本地无文本：若已配置支持视觉/文件的模型，走模型转录（标注"非原文"）
+      let text = ex.text;
+      let note = ex.note;
+      if (!text.trim() && needsModel(p)) {
+        if (cfg) {
+          const r = await analyzeMaterialWithModel(cfg, p, name);
+          if (r.ok && r.text.trim()) {
+            text = `【模型解析，非原文，仅供整理参考；引用与判断请以原件为准】\n${r.text}`;
+          } else {
+            note = r.err ?? ex.note;
+          }
+        } else {
+          note =
+            (ex.note ? `${ex.note}；` : "") + "可在「数据设置」配置支持视觉/文件输入的模型后自动解析";
+        }
+      }
+      const finalEx: ExtractResult = {
+        kind: ex.kind,
+        text,
+        blocks: ex.blocks,
+        truncated: ex.truncated,
+        note,
+      };
+      const id = await addAttachment(taskId, p, finalEx);
+      setMaterials((prev) => [
+        ...prev,
+        {
+          id: id ?? Date.now(),
+          task_id: taskId,
+          file_name: name,
+          file_path: p,
+          kind: ex.kind,
+          blocks: ex.blocks,
+          truncated: ex.truncated,
+          note: note ?? null,
+          text_len: text.length,
+          created_at: new Date().toISOString(),
+        },
+      ]);
+      if (text.trim()) {
+        setContext((prev) => mergeMaterialIntoContext(prev, name, text));
+        pushLog({
+          level: "info",
+          text: `已导入材料 ${name}（${ex.kind}，${ex.blocks} 块${ex.truncated ? "，超长已截断" : ""}${note && text === ex.text ? "" : "，模型解析"}）并并入任务材料`,
+        });
+        setMsg({ type: "ok", text: `已导入 ${name} 并并入任务材料，可点击「① 制定计划」。` });
+      } else {
+        setMsg({ type: "ok", text: `${name}：${note ?? "未提取到文本"}` });
+      }
+      setMatPath("");
+    } finally {
+      setMatBusy(false);
+    }
+  };
+
+  const removeMaterial = async (m: Material) => {
+    await deleteAttachment(m.id);
+    setMaterials((prev) => prev.filter((x) => x.id !== m.id));
   };
 
   /** 交付：导出 .docx（桌面）/ .md 下载（浏览器），并落"最近文书" */
@@ -517,9 +682,7 @@ export default function Agent() {
         }>("task_get", { id: hi.id });
         if (d?.task) {
           const meta = TASK_KINDS.find((x) => x.key === d.task!.kind) ?? TASK_KINDS[0];
-          const kindV = (["review", "lawsuit", "cross_exam"].includes(d.task.kind)
-            ? d.task.kind
-            : "review") as TaskKind;
+          const kindV: TaskKind = isTaskKind(d.task.kind) ? d.task.kind : "review";
           t = {
             id: d.task.id,
             kind: kindV,
@@ -581,6 +744,7 @@ export default function Agent() {
       });
       setMsg(null);
       syncState();
+      setMaterials(await listAttachments(t.id ?? 0));
     } catch (e) {
       setMsg({ type: "err", text: `载入失败：${e instanceof Error ? e.message : String(e)}` });
     }
@@ -608,10 +772,12 @@ export default function Agent() {
     return [...map.values()];
   }, [task]);
 
-  // 首页最近文书与智能体文档联动提示 + 任务历史
+  // 首页最近文书与智能体文档联动提示 + 任务历史 + 知识图谱 + 已有材料
   useEffect(() => {
     void refreshDocs();
     void loadHistory();
+    void refreshKg();
+    void (async () => setMaterials(await listAttachments(0)))();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -640,7 +806,7 @@ export default function Agent() {
       const d = JSON.parse(raw) as { kind?: string; text?: string; ts?: number };
       localStorage.removeItem(LS_AGENT_HANDOFF);
       if (!d.text || !d.text.trim()) return;
-      if (d.kind === "review" || d.kind === "lawsuit" || d.kind === "cross_exam") {
+      if (isTaskKind(d.kind)) {
         setKind(d.kind);
       }
       setContext(d.text.trim());
@@ -715,11 +881,71 @@ export default function Agent() {
         </div>
         {mode !== "idle" && (
           <p className="muted hint" style={{ marginBottom: 0 }}>
-            当前任务：{task?.kindLabel ?? ""} ｜ 模式：
+            当前任务：{task?.kindLabel ?? ""}
+            {task?.caseName ? ` ｜ 案由：${task.caseName}` : ""} ｜ 模式：
             {task?.mode === "demo" ? "演示模式（未配置模型）" : "模型驱动"} ｜ 状态：
             {statusLabel(task?.status ?? "planned")}
             {cfg && <span> ｜ 已接入模型接口</span>}
           </p>
+        )}
+      </div>
+
+      {/* 0.7.0：多模态任务材料（PDF / DOCX / PPTX / XLSX / 文本 / 图片） */}
+      <div className="card">
+        <div className="panel-head">
+          <h3 style={{ margin: 0 }}>任务材料（多模态导入）</h3>
+          <span className="muted hint" style={{ fontSize: 12 }}>
+            PDF / DOCX / PPTX / XLSX / TXT / MD / CSV / 图片（音频暂不支持）
+          </span>
+        </div>
+        <div className="search-row">
+          <input
+            className="search-input"
+            value={matPath}
+            onChange={(e) => setMatPath(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void importMaterial();
+            }}
+            placeholder="粘贴文件完整路径，例如 D:\案件材料\合同.pdf"
+          />
+          <button
+            className="primary small"
+            disabled={matBusy || !matPath.trim()}
+            onClick={() => void importMaterial()}
+          >
+            {matBusy ? "解析中…" : "导入材料"}
+          </button>
+        </div>
+        <p className="muted hint" style={{ fontSize: 12 }}>
+          本地提取（离线可用）：DOCX / PPTX / XLSX / TXT / MD / CSV；<b>PDF 与图片</b>需在「数据设置」配置支持文件 /
+          视觉输入的模型；提取结果会并入下方「任务材料」文本框。
+        </p>
+        {materials.length > 0 && (
+          <ul className="mini-docs">
+            {materials.map((m) => (
+              <li key={m.id}>
+                <div className="mini-doc-main">
+                  <span className="mini-title">{m.file_name}</span>
+                  <span className="muted mini-time">
+                    {[
+                      m.kind,
+                      m.blocks ? `${m.blocks} 块` : null,
+                      m.text_len ? `${m.text_len} 字` : null,
+                      m.truncated ? "已截断" : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </span>
+                  {m.note && <span className="muted mini-path">{m.note}</span>}
+                </div>
+                <div className="mini-doc-actions">
+                  <button className="danger-btn" onClick={() => void removeMaterial(m)}>
+                    移除
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
         )}
       </div>
 
@@ -812,7 +1038,11 @@ export default function Agent() {
                   {st.role && ROLE_LABELS[st.role] && (
                     <span className="tag tag-role">{ROLE_LABELS[st.role]}</span>
                   )}
-                  {st.need_confirm && <span className="tag">需人工确认</span>}
+                  {st.need_confirm && (
+                    <span className={st.confirmed ? "tag tag-role" : "tag"}>
+                      {st.confirmed ? "✓ 已人工确认" : "需人工确认"}
+                    </span>
+                  )}
                   <span className={`chip ${st.status}`}>{st.status}</span>
                 </div>
                 {st.tool === "laws_search" && st.status !== "running" && task.status !== "done" && (
@@ -851,6 +1081,39 @@ export default function Agent() {
           )}
         </div>
       )}
+
+      {/* 0.7.0：知识图谱（案由 → 构成要件 → 请求权基础 / 证据 / 争议焦点 / 文书结构） */}
+      <div className="card">
+        <div className="panel-head">
+          <h3 style={{ margin: 0 }}>
+            知识图谱{kgCase ? ` · 命中案由「${kgCase}」` : ""}
+          </h3>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="ghost-btn" onClick={() => void refreshKg(true)}>
+              查看全部
+            </button>
+            <button className="ghost-btn" onClick={() => void refreshKg()}>
+              刷新
+            </button>
+          </div>
+        </div>
+        <p className="muted hint" style={{ fontSize: 12, marginTop: 0 }}>
+          案由骨架由人工策展（涉外优先）；<b>虚线为任务运行中自动登记的候选边</b>，需点「✓」确认后才作为规划依据，点「✕」拒绝。
+        </p>
+        {kgView ? (
+          <KnowledgeGraph
+            nodes={kgView.nodes}
+            edges={kgView.edges}
+            focusId={kgView.focusId}
+            title={kgCase ?? undefined}
+            height={430}
+            onConfirmEdge={(id) => void handleKgEdge(id, true)}
+            onRejectEdge={(id) => void handleKgEdge(id, false)}
+          />
+        ) : (
+          <p className="muted">浏览器预览模式不提供本地知识图谱，请用桌面版查看（图谱存于本机 SQLite）。</p>
+        )}
+      </div>
 
       {/* 执行日志 */}
       {log.length > 0 && (

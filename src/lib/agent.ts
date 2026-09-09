@@ -15,6 +15,7 @@ import { chatStreamOnce, requestStructuredJson, SYSTEM_PROMPTS } from "./ai";
 import { buildTools, localDocSave, type LawRef, type ToolResult } from "./tools";
 import { callRust, isTauri } from "./tauri";
 import { embedTexts, cosine } from "./embed";
+import { describeSkeleton, loadSkeleton, type KgSkeleton } from "./kg";
 import type { ApiMsg } from "./ai";
 
 // ---------------------------------------------------------------------------
@@ -24,7 +25,12 @@ import type { ApiMsg } from "./ai";
 /** AI 问答 → 文书智能体 交接数据在 localStorage 的键 */
 export const LS_AGENT_HANDOFF = "workbench:agentHandoff";
 
-export type TaskKind = "review" | "lawsuit" | "cross_exam";
+export type TaskKind = "review" | "lawsuit" | "evidence" | "cross_exam" | "argument";
+
+/** 任务类型白名单校验（历史任务 / 交接数据 / 落库值都可能来自旧版本） */
+export function isTaskKind(v: unknown): v is TaskKind {
+  return TASK_KINDS.some((k) => k.key === v);
+}
 export type TaskStatus = "planned" | "running" | "paused" | "done" | "failed";
 export type StepStatus = "pending" | "running" | "done" | "failed" | "waiting";
 
@@ -36,6 +42,8 @@ export interface AgentStep {
   role?: "retriever" | "drafter" | "qa" | "planner";
   params?: Record<string, unknown>;
   need_confirm?: boolean;
+  /** 人工确认闸门是否已放行（运行期状态；仅当 need_confirm=true 时有意义） */
+  confirmed?: boolean;
   prompt?: string; // 推理步骤的指令
   status: StepStatus;
   result_ref?: string;
@@ -63,6 +71,10 @@ export interface AgentTask {
   steps: AgentStep[];
   artifacts: AgentArtifact[];
   refs: LawRef[]; // 累计引用（交付物溯源用）
+  /** 命中的知识图谱案由（0.7.0） */
+  caseName?: string;
+  /** 案由图谱中的请求权基础法名集合（用于适用性校验） */
+  kgLawNames?: string[];
   error?: string;
   created_at?: string;
   updated_at?: string;
@@ -84,14 +96,20 @@ export const TASK_KINDS: Array<{ key: TaskKind; label: string; hint: string; goa
   {
     key: "review",
     label: "合同审查",
-    hint: "粘贴一份合同/协议文本，自动生成《审查意见书》",
+    hint: "粘贴一份合同/协议文本（或导入 PDF / DOCX），自动生成《审查意见书》",
     goal: "生成《合同审查意见书》（.docx）",
   },
   {
     key: "lawsuit",
-    label: "起诉状起草",
+    label: "起诉状",
     hint: "描述纠纷事实与诉求，起草《民事起诉状》草稿",
     goal: "生成《民事起诉状》草稿（.docx）",
+  },
+  {
+    key: "evidence",
+    label: "证据目录",
+    hint: "粘贴案情与证据说明（或导入材料），整理《证据目录》（含表格）",
+    goal: "生成《证据目录》（.docx，表格）",
   },
   {
     key: "cross_exam",
@@ -99,7 +117,27 @@ export const TASK_KINDS: Array<{ key: TaskKind; label: string; hint: string; goa
     hint: "描述证据与质证要求，起草质证意见",
     goal: "生成《质证意见》（.docx）",
   },
+  {
+    key: "argument",
+    label: "代理词",
+    hint: "描述案情与争议焦点，起草《代理词》",
+    goal: "生成《代理词》（.docx）",
+  },
 ];
+
+/** 各任务类型的交付物正文骨架（注入起草员系统提示，约束输出结构） */
+export const KIND_GUIDES: Record<TaskKind, string> = {
+  review:
+    "输出结构：一、合同基本情况；二、逐条风险与修改建议（风险等级 / 原文条款 / 问题 / 修改建议）；三、重点条款专项意见（违约责任、知识产权、争议解决、保密）；四、总体结论与谈判策略。",
+  lawsuit:
+    "输出结构：《民事起诉状》——当事人信息；诉讼请求（分项列明）；事实与理由（时间线 + 法律关系）；证据清单；此致法院；具状人；日期。",
+  evidence:
+    "输出结构：先用 Markdown 表格输出《证据目录》，表头固定为「序号 | 证据名称 | 证据种类 | 证明对象 | 来源/页码 | 备注」；再逐条说明该证据与待证事实（构成要件）的对应关系；最后列出待补充的证据。",
+  cross_exam:
+    "输出结构：一、证据逐项质证（证据名称 + 合法性/真实性/关联性分别评述 + 质证意见）；二、综合质证意见；三、建议申请法院调取或鉴定的证据。",
+  argument:
+    "输出结构：一、案件基本情况与争议焦点；二、事实认定意见（结合在案证据）；三、法律适用意见（逐条引用真实法条）；四、代理意见与请求；五、结语。",
+};
 
 export function kindMeta(kind: string) {
   return (
@@ -129,8 +167,16 @@ export function fallbackPlan(kind: TaskKind): AgentStep[] {
       return base([
         { name: "事实与诉求要点梳理", role: "planner" },
         { name: "检索法律依据", tool: "laws_search", params: { keyword: "", country: "中国" }, role: "retriever" },
-        { name: "载入起诉状模板", tool: "template_load", params: { category: "诉讼文书" }, role: "retriever" },
+        { name: "载入起诉状模板", tool: "template_load", params: { category: "诉讼文书", title: "民事起诉状" }, role: "retriever" },
         { name: "起草起诉状正文", role: "drafter" },
+      ]);
+    case "evidence":
+      return base([
+        { name: "案情与证据要点梳理", role: "planner" },
+        { name: "检索证据规则法条", tool: "laws_search", params: { keyword: "", country: "中国" }, role: "retriever" },
+        { name: "载入证据目录模板", tool: "template_load", params: { category: "诉讼文书", title: "证据目录" }, role: "retriever" },
+        { name: "整理证据目录与证明目的", role: "drafter" },
+        { name: "质检：三性与要件覆盖检查", role: "qa" },
       ]);
     case "cross_exam":
       return base([
@@ -138,6 +184,14 @@ export function fallbackPlan(kind: TaskKind): AgentStep[] {
         { name: "检索证据相关法条", tool: "laws_search", params: { keyword: "", country: "中国" }, role: "retriever" },
         { name: "起草质证意见", role: "drafter" },
         { name: "质检：三性覆盖检查", role: "qa" },
+      ]);
+    case "argument":
+      return base([
+        { name: "争议焦点与事实梳理", role: "planner" },
+        { name: "检索法律依据", tool: "laws_search", params: { keyword: "", country: "中国" }, role: "retriever" },
+        { name: "载入代理词模板", tool: "template_load", params: { category: "诉讼文书", title: "代理词" }, role: "retriever" },
+        { name: "起草代理词正文", role: "drafter" },
+        { name: "质检：争点与引用覆盖检查", role: "qa" },
       ]);
   }
 }
@@ -162,6 +216,75 @@ export interface PlanResult {
   kindLabel: string;
   mode: "agent" | "demo";
   steps: AgentStep[];
+  /** 命中的知识图谱案由 */
+  caseName?: string;
+  /** 案由图谱的请求权基础法名 */
+  kgLawNames?: string[];
+}
+
+/** 由法名推断法域（用于检索时限定国家） */
+const COUNTRY_BY_LAW: Array<[RegExp, string]> = [
+  [/民法|商法|会社法|民事訴訟法|日本国憲法|労働基準法|著作権法/, "日本"],
+  [/美国法典|美利坚合众国宪法/, "美国"],
+  [/中华人民共和国/, "中国"],
+];
+
+function countryOfLaws(laws: string[]): string | undefined {
+  const hits = new Set<string>();
+  for (const l of laws) {
+    for (const [re, c] of COUNTRY_BY_LAW) {
+      if (re.test(l)) hits.add(c);
+    }
+  }
+  return hits.size === 1 ? [...hits][0] : undefined;
+}
+
+/**
+ * 由知识图谱骨架生成计划步骤（0.7.0 核心）：
+ * 图谱给出「案由 → 构成要件 → 请求权基础 / 证据」结构，规划在其上填充，
+ * 保证要件不漏、检索有明确法域、起草有要件清单约束。
+ */
+export function planFromSkeleton(kind: TaskKind, sk: KgSkeleton): AgentStep[] {
+  const meta = kindMeta(kind);
+  const elNames = sk.elements.map((e) => e.name);
+  const lawNames = [...new Set(sk.elements.flatMap((e) => e.laws))];
+  const evNames = [...new Set(sk.elements.flatMap((e) => e.evidences))];
+  const country = countryOfLaws(lawNames);
+  const steps: Array<Omit<AgentStep, "seq" | "status">> = [
+    {
+      name: `按案由要件梳理材料（${elNames.join("、") || "构成要件"}）`,
+      role: "planner",
+      prompt: `本案由：${sk.case}。请逐项梳理材料事实与待证事实：${elNames.join("、")}。${
+        sk.issues.length ? `争议焦点：${sk.issues.join("、")}。` : ""
+      }`,
+    },
+    {
+      name: "检索法律依据",
+      tool: "laws_search",
+      params: { keyword: lawNames[0] ?? "", country: country ?? "全部国家" },
+      role: "retriever",
+    },
+  ];
+  if (kind === "lawsuit" || kind === "evidence" || kind === "argument") {
+    const titleByKind: Partial<Record<TaskKind, string>> = {
+      lawsuit: "民事起诉状",
+      evidence: "证据目录",
+      argument: "代理词",
+    };
+    steps.push({
+      name: "载入文书模板",
+      tool: "template_load",
+      params: { category: "诉讼文书", title: titleByKind[kind] },
+      role: "retriever",
+    });
+  }
+  steps.push({
+    name: `起草${meta.label}正文`,
+    role: "drafter",
+    prompt: `${evNames.length ? `证据要点：${evNames.join("、")}。` : ""}按构成要件逐项展开，只引用工具真实返回的法条。`,
+  });
+  steps.push({ name: "质检：要件覆盖与引用核对", role: "qa" });
+  return steps.map((s, i) => ({ ...s, seq: i, status: "pending" as const }));
 }
 
 export async function planTask(
@@ -171,17 +294,23 @@ export async function planTask(
   signal?: AbortSignal,
 ): Promise<PlanResult> {
   const meta = kindMeta(kind);
+  // 0.7.0：先检索本地知识图谱，命中案由则用图谱骨架作为规划底座（无命中回退预设流水线）
+  const skeleton = await loadSkeleton(context);
   const fallback: PlanResult = {
     kindLabel: meta.label,
     mode: "demo",
-    steps: fallbackPlan(kind),
+    steps: skeleton ? planFromSkeleton(kind, skeleton) : fallbackPlan(kind),
+    caseName: skeleton?.case,
+    kgLawNames: skeleton?.lawNames,
   };
   if (!cfg || !cfg.baseUrl.trim() || !cfg.apiKey.trim()) return fallback;
 
   const recalled = await recallMemory(cfg, kind, context);
   const userText = `任务类型：${meta.label}。\n用户输入：\n${context.slice(0, 6000)}\n\n${
-    recalled ? `历史相关经验：\n${recalled}\n（可参考但勿照搬）\n` : ""
-  }`;
+    skeleton
+      ? `【知识图谱骨架（来自本地图谱，规划必须覆盖下列构成要件）】\n${describeSkeleton(skeleton)}\n`
+      : ""
+  }${recalled ? `历史相关经验：\n${recalled}\n（可参考但勿照搬）\n` : ""}`;
   const plan = await requestStructuredJson<{
     title?: string;
     steps?: Array<{
@@ -210,6 +339,8 @@ export async function planTask(
     kindLabel: meta.label,
     mode: "agent",
     steps: steps.length > 8 ? steps.slice(0, 8) : steps,
+    caseName: skeleton?.case,
+    kgLawNames: skeleton?.lawNames,
   };
 }
 
@@ -243,8 +374,8 @@ export async function executeStep(
   const set = (patch: Partial<AgentStep>) => Object.assign(step, patch);
   set({ status: "running", started_at: new Date().toISOString() });
 
-  // 需要人工确认的步骤：先停住
-  if (step.need_confirm) {
+  // 需要人工确认的步骤：先停住（已放行过的步骤不再拦截，否则「继续」会无限回到 waiting）
+  if (step.need_confirm && !step.confirmed) {
     set({ status: "waiting" });
     emit({ step, kind: "gate" });
     return;
@@ -404,6 +535,7 @@ async function runReasoningStep(
     const sys =
       roleSystem(step.role) +
       (step.prompt ? `\n本步指令：${step.prompt}` : "") +
+      (step.role === "drafter" ? `\n交付物结构要求：${KIND_GUIDES[task.kind]}` : "") +
       `\n任务：${task.kindLabel}。禁止编造法条；引用必须来自工具真实返回（含来源）。`;
     const msgs: ApiMsg[] = [
       { role: "system", content: sys },
@@ -424,14 +556,22 @@ async function runReasoningStep(
 /** 质检步骤收尾：对“已执行步骤产出”追加确定性引用自检结论（规则执行，非模型自述） */
 function appendQaAudit(task: AgentTask, evidence: string): string {
   const audit = auditCitations(evidence, task.refs);
+  let out: string;
   if (audit.ok) {
-    return `\n\n【引用自检 · 确定性规则】通过：产出中共识别 ${audit.total} 处条文号引用，全部可回溯到本次工具真实返回的本地法条（${audit.covered}/${audit.total}）。`;
+    out = `\n\n【引用自检 · 确定性规则】通过：产出中共识别 ${audit.total} 处条文号引用，全部可回溯到本次工具真实返回的本地法条（${audit.covered}/${audit.total}）。`;
+  } else {
+    const listed = audit.unmatched
+      .slice(0, 8)
+      .map((t) => `「${t}」`)
+      .join("、");
+    out = `\n\n【引用自检 · 确定性规则】需人工核实：产出中共识别 ${audit.total} 处条文号引用，其中 ${audit.unmatched.length} 处未在工具真实返回中找到对应条文（${listed}${audit.unmatched.length > 8 ? "…" : ""}）——可能来自用户材料原文或模型笔误，已提示人工核实后再采用。`;
   }
-  const listed = audit.unmatched
-    .slice(0, 8)
-    .map((t) => `「${t}」`)
-    .join("、");
-  return `\n\n【引用自检 · 确定性规则】需人工核实：产出中共识别 ${audit.total} 处条文号引用，其中 ${audit.unmatched.length} 处未在工具真实返回中找到对应条文（${listed}${audit.unmatched.length > 8 ? "…" : ""}）——可能来自用户材料原文或模型笔误，已提示人工核实后再采用。`;
+  if (task.kgLawNames && task.kgLawNames.length > 0) {
+    out += `\n\n【适用性校验 · 知识图谱】\n${applicabilityReport(
+      auditApplicability(task.refs, task.kgLawNames),
+    )}`;
+  }
+  return out;
 }
 
 /** 演示模式：根据已检索到的引用给出可读的分析占位 */
@@ -528,6 +668,52 @@ export function auditReport(a: CitationAudit): string {
 }
 
 // ---------------------------------------------------------------------------
+// 0.7.0：法条适用性校验（知识图谱第二段自检）
+// 第一段 auditCitations 校验「引用是否真实存在（工具返回）」；
+// 第二段校验「引用是否落在本案由图谱的请求权基础范围内」。
+// ---------------------------------------------------------------------------
+
+export interface ApplicabilityAudit {
+  checked: number;
+  inScope: string[];
+  outOfScope: string[];
+  lawNames: string[];
+}
+
+/** 名称互含即视为同一部法（图谱存法名，法条返回 title 可能带后缀） */
+function sameLaw(a: string, b: string): boolean {
+  const x = a.replace(/\s+/g, "");
+  const y = b.replace(/\s+/g, "");
+  return x === y || x.includes(y) || y.includes(x);
+}
+
+export function auditApplicability(refs: LawRef[], lawNames: string[]): ApplicabilityAudit {
+  const titles = [...new Set(refs.map((r) => r.title))];
+  const inScope = titles.filter((t) => lawNames.some((l) => sameLaw(t, l)));
+  const outOfScope = titles.filter((t) => !inScope.includes(t));
+  return { checked: titles.length, inScope, outOfScope, lawNames };
+}
+
+export function applicabilityReport(a: ApplicabilityAudit): string {
+  if (a.lawNames.length === 0) {
+    return "- 未命中知识图谱案由，跳过适用性校验。";
+  }
+  const lines: string[] = [];
+  lines.push(`- 本案由图谱请求权基础：${a.lawNames.join("、")}`);
+  lines.push(`- 本次引用法条 ${a.checked} 部，落在案由范围内的 ${a.inScope.length} 部`);
+  if (a.outOfScope.length > 0) {
+    lines.push(
+      `- ⚠ 以下引用不在本案由图谱范围内（可能仍然相关，请人工判断）：${a.outOfScope
+        .map((t) => `「${t}」`)
+        .join("、")}`,
+    );
+  } else if (a.checked > 0) {
+    lines.push("- ✅ 全部引用均落在本案由图谱的请求权基础范围内");
+  }
+  return lines.join("\n");
+}
+
+// ---------------------------------------------------------------------------
 // 交付物合成 + 导出
 // ---------------------------------------------------------------------------
 
@@ -575,6 +761,12 @@ export function composeDeliverable(task: AgentTask): string {
   // 只审计“模型/步骤产出”（二）里的引用——不审计输入原文与自检段自身
   const audit = auditCitations(stepTexts.join("\n"), task.refs);
   lines.push(auditReport(audit));
+  if (task.kgLawNames && task.kgLawNames.length > 0) {
+    lines.push("");
+    lines.push(`### 四之二、法条适用性校验（知识图谱 · 案由「${task.caseName ?? "未命名"}」）`);
+    lines.push("");
+    lines.push(applicabilityReport(auditApplicability(task.refs, task.kgLawNames)));
+  }
   lines.push("");
   lines.push("## 五、结论");
   lines.push("");

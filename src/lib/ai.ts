@@ -12,10 +12,16 @@ export interface ChatMsg {
   content: string;
 }
 
-/** 支持 tool 角色的消息类型（用于 agent 循环） */
+/** 多模态内容块（OpenAI 兼容 content parts 子集，0.7.0） */
+export type ApiContentPart =
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string } }
+  | { type: "file"; file: { filename: string; file_data: string } };
+
+/** 支持 tool 角色的消息类型（用于 agent 循环）；content 可为字符串或多模态内容块数组 */
 export interface ApiMsg {
   role: "system" | "user" | "assistant" | "tool";
-  content?: string | null;
+  content?: string | null | ApiContentPart[];
   name?: string;
   tool_call_id?: string;
   tool_calls?: Array<{

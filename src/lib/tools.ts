@@ -208,6 +208,7 @@ async function runCountryPreview(args: any): Promise<ToolResult> {
 
 async function runTemplateLoad(args: any): Promise<ToolResult> {
   const category = args?.category ? String(args.category) : undefined;
+  const title = args?.title ? String(args.title).trim() : "";
   let list: Array<{ id: number; title: string; category?: string | null; content: string }> = [];
   if (isTauri()) {
     const r = await callRust<Array<{ id: number; title: string; category?: string | null; content: string }>>(
@@ -219,11 +220,24 @@ async function runTemplateLoad(args: any): Promise<ToolResult> {
     list = readLocalTemplates();
   }
   const filtered = category ? list.filter((t) => t.category === category) : list;
-  const t = filtered[0];
+  // 0.7.0：同一分类下有多份模板（诉讼文书含起诉状/证据目录/代理词等），
+  // 必须按标题精确/包含匹配，否则会取到分类的第一份、载错模板
+  let t: (typeof filtered)[number] | undefined;
+  if (title) {
+    t =
+      filtered.find((x) => x.title === title) ??
+      filtered.find((x) => x.title.includes(title)) ??
+      filtered.find((x) => title.includes(x.title)) ??
+      filtered[0];
+  } else {
+    t = filtered[0];
+  }
   if (!t) return { ok: true, text: `没有可用模板${category ? `（分类：${category}）` : ""}。` };
   return {
     ok: true,
-    text: `已载入模板「${t.title}」（${filtered.length} 份候选中的第 1 份）：\n${truncate(t.content, 1200)}`,
+    text: `已载入模板「${t.title}」${category ? `（分类：${category}）` : ""}${
+      filtered.length > 1 ? `（分类内 ${filtered.length} 份候选）` : ""
+    }：\n${truncate(t.content, 1200)}`,
     refs: [],
   };
 }
@@ -300,10 +314,14 @@ const IMPLS: ToolImpl[] = [
   },
   {
     name: "template_load",
-    description: "载入内置法律文书模板（如起诉状、律师函、合同），供起草时参考结构与格式。",
+    description:
+      "载入内置法律文书模板（如起诉状、证据目录、代理词、律师函、合同），供起草时参考结构与格式。category 限分类（授权文书 / 诉讼文书 / 劳动仲裁 / 函件 / 合同）；同分类多份模板时可再给 title 精确指定（如 title=证据目录）。",
     parameters: {
       type: "object",
-      properties: { category: { type: "string", description: "模板分类：诉讼文书 / 函件 / 合同 等" } },
+      properties: {
+        category: { type: "string", description: "模板分类：诉讼文书 / 函件 / 合同 等" },
+        title: { type: "string", description: "模板标题（可选）：同分类多份模板时精确指定" },
+      },
     },
     run: runTemplateLoad,
   },

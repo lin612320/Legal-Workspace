@@ -301,16 +301,77 @@ fn migrate(conn: &Connection) -> Result<(), String> {
     )
     .map_err(|e| e.to_string())?;
 
+    // 0.7.0：知识图谱（案由-要件-法条-证据-文书）——涉外案由优先，候选边需人工确认
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS kg_node (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            type       TEXT NOT NULL,
+            name       TEXT NOT NULL,
+            name_alt   TEXT,
+            source     TEXT,
+            confidence REAL NOT NULL DEFAULT 1.0,
+            note       TEXT,
+            created_at TEXT NOT NULL,
+            UNIQUE(type, name)
+        )",
+        [],
+    )
+    .map_err(|e| e.to_string())?;
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS kg_edge (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            src        INTEGER NOT NULL,
+            rel        TEXT NOT NULL,
+            dst        INTEGER NOT NULL,
+            weight     REAL NOT NULL DEFAULT 1.0,
+            source     TEXT,
+            confidence REAL NOT NULL DEFAULT 1.0,
+            confirmed  INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            UNIQUE(src, rel, dst)
+        )",
+        [],
+    )
+    .map_err(|e| e.to_string())?;
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_kg_edge_src ON kg_edge(src)", [])
+        .map_err(|e| e.to_string())?;
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_kg_edge_dst ON kg_edge(dst)", [])
+        .map_err(|e| e.to_string())?;
+
+    // 0.7.0：任务材料（多模态导入：PDF / DOCX / XLSX / PPTX / 图片 等提取后的文本）
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS task_attachments (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_id    INTEGER NOT NULL DEFAULT 0,
+            file_name  TEXT NOT NULL,
+            file_path  TEXT NOT NULL,
+            kind       TEXT,
+            size_bytes INTEGER,
+            text       TEXT,
+            blocks     INTEGER,
+            truncated  INTEGER NOT NULL DEFAULT 0,
+            note       TEXT,
+            created_at TEXT NOT NULL
+        )",
+        [],
+    )
+    .map_err(|e| e.to_string())?;
+
     // 法规 FTS5 全文索引（P2）：在种子数据之后建索引更合理（见 migrate 尾部）
     // 版块 2：法规表无数据时播种少量示例条文，便于即时体验检索
     seed_laws_if_empty(conn)?;
-
     // 版块 3：模板表无数据时播种内置文书
     seed_templates_if_empty(conn)?;
+
+    // 0.7.0：幂等补齐新增的内置模板（证据目录 / 代理词）——老库升级后也能拿到
+    ensure_builtin_templates(conn)?;
 
     // 赛事版：国家概览与整部法元信息（仅首次播种，不覆盖导入/更新的元数据）
     seed_country_intro_if_empty(conn)?;
     seed_laws_meta_if_empty(conn)?;
+
+    // 0.7.0：知识图谱种子（涉外案由优先；按 type+name 幂等，可重复启动）
+    seed_kg_if_empty(conn)?;
 
     // 赛事版：美国宪法官方中译（Preamble + Article I–VII）按 article_no 回填 content_zh（幂等，仅补空值）
     enrich_us_constitution_zh(conn)?;
@@ -373,6 +434,41 @@ fn seed_templates_if_empty(conn: &Connection) -> Result<(), String> {
             rusqlite::params![s[0], s[1], s[2], s[3]],
         )
         .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// 0.7.0：幂等补齐「新增版本才引入」的内置模板。
+/// `seed_templates_if_empty` 只在空表时播种，老库升级后不会补新模板，故单列此函数按标题补。
+fn ensure_builtin_templates(conn: &Connection) -> Result<(), String> {
+    let extra: &[(&str, &str, &str)] = &[
+        (
+            "证据目录",
+            "诉讼文书",
+            "证据目录\n\n案号：________　　当事人：________\n\n| 序号 | 证据名称 | 证据种类 | 证明对象 | 来源/页码 | 备注 |\n| --- | --- | --- | --- | --- | --- |\n| 1 | ________ | 书证 | ________ | ________ | ________ |\n| 2 | ________ | 物证 | ________ | ________ | ________ |\n| 3 | ________ | 电子数据 | ________ | ________ | ________ |\n\n以上证据共____份，随本目录一并提交。\n\n提交人（签名）：________\n____年__月__日",
+        ),
+        (
+            "代理词（民事）",
+            "诉讼文书",
+            "代理词\n\n尊敬的审判长、审判员：\n________律师事务所接受________的委托，指派本律师担任其与________纠纷一案的________代理人。现结合本案事实与法律规定，发表如下代理意见：\n\n一、案件基本情况与争议焦点\n……\n\n二、事实认定意见\n……\n\n三、法律适用意见\n……\n\n四、代理意见与请求\n……\n\n五、结语\n……\n\n代理人：________\n________律师事务所\n____年__月__日",
+        ),
+    ];
+    for (title, category, content) in extra {
+        let exists: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM templates WHERE title = ?1",
+                [title],
+                |r| r.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+        if exists == 0 {
+            conn.execute(
+                "INSERT INTO templates(title, category, content, file_type, built_in)
+                 VALUES (?1, ?2, ?3, 'txt', 1)",
+                rusqlite::params![title, category, content],
+            )
+            .map_err(|e| e.to_string())?;
+        }
     }
     Ok(())
 }
@@ -617,8 +713,7 @@ fn enrich_us_constitution_zh(conn: &Connection) -> Result<(), String> {
 }
 
 /// 读取一条设置
-pub fn get_setting(conn: &Connection, key: &str) -> Result<Option<String>, String> {
-    let mut stmt = conn
+pub fn get_setting(conn: &Connection, key: &str) -> Result<Option<String>, String> {    let mut stmt = conn
         .prepare("SELECT value FROM settings WHERE key = ?1")
         .map_err(|e| e.to_string())?;
     let mut rows = stmt.query([key]).map_err(|e| e.to_string())?;
@@ -1044,7 +1139,13 @@ pub fn task_steps_save(
             .get("params")
             .map(|v| v.to_string())
             .or_else(|| s.get("params_json").and_then(|v| v.as_str()).map(String::from));
-        let need_confirm = s.get("need_confirm").and_then(|v| v.as_i64()).unwrap_or(0);
+        // 前端传布尔（true/false），历史/兼容路径可能传 0/1，两种都要认；
+        // 早期实现只取 as_i64()，布尔会被静默落成 0，导致「需人工确认」重启后消失。
+        let need_confirm = match s.get("need_confirm") {
+            Some(serde_json::Value::Bool(b)) => *b as i64,
+            Some(serde_json::Value::Number(n)) => n.as_i64().unwrap_or(0),
+            _ => 0,
+        };
         conn.execute(
             "INSERT INTO task_steps(task_id, seq, name, tool, params_json, status, need_confirm)
              VALUES (?1, ?2, ?3, ?4, ?5, 'pending', ?6)",
@@ -1160,4 +1261,528 @@ pub fn mem_list(conn: &Connection, kind: Option<&str>) -> Result<Vec<serde_json:
         rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?
     };
     Ok(rows)
+}
+
+// ---------------------------------------------------------------------------
+// 0.7.0：知识图谱（kg_node / kg_edge）——涉外案由优先、人工可确认
+// ---------------------------------------------------------------------------
+
+/// 关系类型（固定 5 种，方向固定）
+pub const KG_REL_ELEMENT: &str = "构成要件是"; // case → element
+pub const KG_REL_LAW: &str = "请求权基础是"; // element → law
+pub const KG_REL_EVIDENCE: &str = "证明对象是"; // element → evidence
+pub const KG_REL_ISSUE: &str = "常见争点是"; // case → issue
+pub const KG_REL_DOC: &str = "文书载体是"; // case → doc
+
+/// 人工策展的案由种子（涉外优先；法条节点只写「法律名」，不写具体条号，避免编造）
+struct KgSeedCase {
+    case: &'static str,
+    keywords: &'static [&'static str],
+    /// (构成要件, 请求权基础法律名列表)
+    elements: &'static [(&'static str, &'static [&'static str])],
+    /// (证据种类, 对应要件)
+    evidences: &'static [(&'static str, &'static str)],
+    issues: &'static [&'static str],
+    docs: &'static [&'static str],
+}
+
+const KG_SEED: &[KgSeedCase] = &[
+    KgSeedCase {
+        case: "涉外货物买卖合同纠纷",
+        keywords: &[
+            "货物买卖", "买卖合同", "交付", "验收", "货款", "提单", "出口", "进口", "信用证",
+        ],
+        elements: &[
+            ("合同成立与生效", &["民法", "美国法典 Title 15 — 商业与贸易"]),
+            ("标的物交付与验收", &["民法"]),
+            ("价款支付与结算", &["民法", "商法"]),
+            ("违约责任与损害赔偿", &["民法"]),
+            ("争议解决与法律适用", &["民事訴訟法"]),
+        ],
+        evidences: &[
+            ("书面合同/订单", "合同成立与生效"),
+            ("往来函件与电子邮件", "合同成立与生效"),
+            ("提单与运输单据", "标的物交付与验收"),
+            ("检验报告/验收单", "标的物交付与验收"),
+            ("发票与付款凭证", "价款支付与结算"),
+            ("催告函与回函", "违约责任与损害赔偿"),
+        ],
+        issues: &[
+            "合同效力争议", "交付与验收争议", "货款支付争议", "违约金过高", "管辖与法律适用争议",
+        ],
+        docs: &["合同审查意见书", "民事起诉状", "证据目录", "质证意见", "代理词"],
+    },
+    KgSeedCase {
+        case: "涉外合资经营合同纠纷",
+        keywords: &[
+            "合资", "合营", "出资", "股权", "章程", "董事会", "利润分配", "退出",
+        ],
+        elements: &[
+            ("出资义务与验资", &["会社法"]),
+            ("公司治理与决策程序", &["会社法"]),
+            ("利润分配与财务", &["会社法", "美国法典 Title 15 — 商业与贸易"]),
+            ("股权转让与退出", &["会社法"]),
+            ("违约责任与损害赔偿", &["民法"]),
+        ],
+        evidences: &[
+            ("合资合同/合营协议", "出资义务与验资"),
+            ("公司章程", "公司治理与决策程序"),
+            ("出资凭证与验资报告", "出资义务与验资"),
+            ("董事会/股东会决议", "公司治理与决策程序"),
+            ("审计报告与财务报表", "利润分配与财务"),
+        ],
+        issues: &["出资违约", "控制权与表决权争议", "利润分配争议", "股权转让效力"],
+        docs: &["合同审查意见书", "民事起诉状", "证据目录", "质证意见", "代理词"],
+    },
+];
+
+/// 取（或插入）节点 id；(type,name) 唯一，幂等
+fn kg_node_id(
+    conn: &Connection,
+    ntype: &str,
+    name: &str,
+    name_alt: Option<&str>,
+    source: Option<&str>,
+    confidence: f64,
+    note: Option<&str>,
+) -> Result<i64, String> {
+    let now = chrono::Local::now().to_rfc3339();
+    conn.execute(
+        "INSERT OR IGNORE INTO kg_node(type, name, name_alt, source, confidence, note, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        rusqlite::params![ntype, name, name_alt, source, confidence, note, now],
+    )
+    .map_err(|e| e.to_string())?;
+    conn.query_row(
+        "SELECT id FROM kg_node WHERE type = ?1 AND name = ?2",
+        rusqlite::params![ntype, name],
+        |r| r.get(0),
+    )
+    .map_err(|e| e.to_string())
+}
+
+/// 取（或插入）边 id；(src,rel,dst) 唯一，幂等
+fn kg_edge_id(
+    conn: &Connection,
+    src: i64,
+    rel: &str,
+    dst: i64,
+    weight: f64,
+    source: Option<&str>,
+    confidence: f64,
+    confirmed: bool,
+) -> Result<i64, String> {
+    let now = chrono::Local::now().to_rfc3339();
+    conn.execute(
+        "INSERT OR IGNORE INTO kg_edge(src, rel, dst, weight, source, confidence, confirmed, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        rusqlite::params![src, rel, dst, weight, source, confidence, confirmed as i64, now],
+    )
+    .map_err(|e| e.to_string())?;
+    conn.query_row(
+        "SELECT id FROM kg_edge WHERE src = ?1 AND rel = ?2 AND dst = ?3",
+        rusqlite::params![src, rel, dst],
+        |r| r.get(0),
+    )
+    .map_err(|e| e.to_string())
+}
+
+/// 幂等播种知识图谱（涉外案由优先）
+fn seed_kg_if_empty(conn: &Connection) -> Result<(), String> {
+    for c in KG_SEED {
+        let case_id = kg_node_id(
+            conn,
+            "case",
+            c.case,
+            None,
+            Some("人工策展"),
+            1.0,
+            Some(&format!("关键词：{}", c.keywords.join("、"))),
+        )?;
+        for (el, laws) in c.elements {
+            let el_id = kg_node_id(conn, "element", el, None, Some("人工策展"), 1.0, None)?;
+            kg_edge_id(conn, case_id, KG_REL_ELEMENT, el_id, 1.0, Some("人工策展"), 1.0, true)?;
+            for law in *laws {
+                let law_id = kg_node_id(conn, "law", law, None, Some("内置法库"), 0.9, None)?;
+                kg_edge_id(conn, el_id, KG_REL_LAW, law_id, 1.0, Some("人工策展"), 0.9, true)?;
+            }
+        }
+        for (ev, el) in c.evidences {
+            let ev_id = kg_node_id(conn, "evidence", ev, None, Some("人工策展"), 1.0, None)?;
+            let el_id = kg_node_id(conn, "element", el, None, Some("人工策展"), 1.0, None)?;
+            kg_edge_id(conn, el_id, KG_REL_EVIDENCE, ev_id, 1.0, Some("人工策展"), 1.0, true)?;
+        }
+        for iss in c.issues {
+            let iss_id = kg_node_id(conn, "issue", iss, None, Some("人工策展"), 1.0, None)?;
+            kg_edge_id(conn, case_id, KG_REL_ISSUE, iss_id, 1.0, Some("人工策展"), 1.0, true)?;
+        }
+        for d in c.docs {
+            let d_id = kg_node_id(conn, "doc", d, None, Some("人工策展"), 1.0, None)?;
+            kg_edge_id(conn, case_id, KG_REL_DOC, d_id, 1.0, Some("人工策展"), 1.0, true)?;
+        }
+    }
+    Ok(())
+}
+
+type KgNodeRow = (i64, String, String, Option<String>, Option<String>, f64, Option<String>);
+type KgEdgeRow = (i64, i64, String, i64, f64, Option<String>, f64, bool);
+
+fn kg_all_nodes(conn: &Connection) -> Result<Vec<KgNodeRow>, String> {
+    let mut stmt = conn
+        .prepare("SELECT id, type, name, name_alt, source, confidence, note FROM kg_node ORDER BY id")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |r| {
+            Ok((
+                r.get::<_, i64>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, String>(2)?,
+                r.get::<_, Option<String>>(3)?,
+                r.get::<_, Option<String>>(4)?,
+                r.get::<_, f64>(5)?,
+                r.get::<_, Option<String>>(6)?,
+            ))
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+fn kg_all_edges(conn: &Connection) -> Result<Vec<KgEdgeRow>, String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, src, rel, dst, weight, source, confidence, confirmed
+             FROM kg_edge ORDER BY id",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |r| {
+            Ok((
+                r.get::<_, i64>(0)?,
+                r.get::<_, i64>(1)?,
+                r.get::<_, String>(2)?,
+                r.get::<_, i64>(3)?,
+                r.get::<_, f64>(4)?,
+                r.get::<_, Option<String>>(5)?,
+                r.get::<_, f64>(6)?,
+                r.get::<_, i64>(7)? == 1,
+            ))
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+fn kg_node_json(n: &KgNodeRow) -> serde_json::Value {
+    serde_json::json!({
+        "id": n.0, "type": n.1, "name": n.2, "name_alt": n.3,
+        "source": n.4, "confidence": n.5, "note": n.6,
+    })
+}
+
+fn kg_edge_json(e: &KgEdgeRow) -> serde_json::Value {
+    serde_json::json!({
+        "id": e.0, "src": e.1, "rel": e.2, "dst": e.3, "weight": e.4,
+        "source": e.5, "confidence": e.6, "confirmed": e.7,
+    })
+}
+
+/// 全量图谱（可视化用）
+pub fn kg_list(conn: &Connection) -> Result<serde_json::Value, String> {
+    let nodes = kg_all_nodes(conn)?;
+    let edges = kg_all_edges(conn)?;
+    Ok(serde_json::json!({
+        "nodes": nodes.iter().map(kg_node_json).collect::<Vec<_>>(),
+        "edges": edges.iter().map(kg_edge_json).collect::<Vec<_>>(),
+    }))
+}
+
+/// 某案由的子图（2 跳内），供任务规划使用
+pub fn kg_query(conn: &Connection, case_name: &str) -> Result<Option<serde_json::Value>, String> {
+    let nodes = kg_all_nodes(conn)?;
+    let edges = kg_all_edges(conn)?;
+    let root = match nodes.iter().find(|n| n.1 == "case" && n.2 == case_name) {
+        Some(n) => n.0,
+        None => return Ok(None),
+    };
+    let mut reachable: std::collections::HashSet<i64> = std::collections::HashSet::new();
+    reachable.insert(root);
+    for _ in 0..2 {
+        let snapshot: Vec<i64> = reachable.iter().copied().collect();
+        let mut grew = false;
+        for e in &edges {
+            if snapshot.contains(&e.1) && reachable.insert(e.3) {
+                grew = true;
+            }
+            if snapshot.contains(&e.3) && reachable.insert(e.1) {
+                grew = true;
+            }
+        }
+        if !grew {
+            break;
+        }
+    }
+    let sub_nodes: Vec<&KgNodeRow> = nodes.iter().filter(|n| reachable.contains(&n.0)).collect();
+    let sub_edges: Vec<&KgEdgeRow> = edges
+        .iter()
+        .filter(|e| reachable.contains(&e.1) && reachable.contains(&e.3))
+        .collect();
+    Ok(Some(serde_json::json!({
+        "case": case_name,
+        "root": root,
+        "nodes": sub_nodes.iter().map(|n| kg_node_json(n)).collect::<Vec<_>>(),
+        "edges": sub_edges.iter().map(|e| kg_edge_json(e)).collect::<Vec<_>>(),
+    })))
+}
+
+/// 按关键词把任务材料归到某个案由（返回案由名；无法判断返回 None）
+pub fn kg_find_case(conn: &Connection, text: &str) -> Result<Option<String>, String> {
+    let nodes = kg_all_nodes(conn)?;
+    let mut best: Option<(String, usize)> = None;
+    for c in KG_SEED {
+        if !nodes.iter().any(|n| n.1 == "case" && n.2 == c.case) {
+            continue;
+        }
+        let hits = c.keywords.iter().filter(|k| text.contains(**k)).count();
+        if hits > 0 && best.as_ref().map(|(_, b)| hits > *b).unwrap_or(true) {
+            best = Some((c.case.to_string(), hits));
+        }
+    }
+    Ok(best.map(|(c, _)| c))
+}
+
+/// 人工确认 / 拒绝一条候选边
+pub fn kg_confirm_edge(conn: &Connection, id: i64, confirmed: bool) -> Result<(), String> {
+    if confirmed {
+        conn.execute(
+            "UPDATE kg_edge SET confirmed = 1,
+                    confidence = MAX(confidence, 0.85),
+                    source = COALESCE(source, '人工确认')
+             WHERE id = ?1",
+            [id],
+        )
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+    } else {
+        conn.execute("DELETE FROM kg_edge WHERE id = ?1", [id])
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+}
+
+/// 运行期候选边：任务实际检索命中的法条 → 挂到案由下（低置信度，待人工确认）
+pub fn kg_add_candidate(
+    conn: &Connection,
+    case_name: &str,
+    law_title: &str,
+    task_id: Option<i64>,
+) -> Result<Option<i64>, String> {
+    let case_id: i64 = match conn.query_row(
+        "SELECT id FROM kg_node WHERE type = 'case' AND name = ?1",
+        [case_name],
+        |r| r.get(0),
+    ) {
+        Ok(v) => v,
+        Err(_) => return Ok(None),
+    };
+    let law_id = kg_node_id(conn, "law", law_title, None, Some("任务检索命中"), 0.5, None)?;
+    // 已存在的边不重复登记（否则每次跑任务都会刷出"新增候选边"）
+    let existing: Option<i64> = conn
+        .query_row(
+            "SELECT id FROM kg_edge WHERE src = ?1 AND rel = ?2 AND dst = ?3",
+            rusqlite::params![case_id, KG_REL_LAW, law_id],
+            |r| r.get(0),
+        )
+        .ok();
+    if existing.is_some() {
+        return Ok(None);
+    }
+    let src = format!("task-log:{}", task_id.unwrap_or(0));
+    let id = kg_edge_id(
+        conn,
+        case_id,
+        KG_REL_LAW,
+        law_id,
+        0.6,
+        Some(&src),
+        0.5,
+        false,
+    )?;
+    Ok(Some(id))
+}
+
+// ---------------------------------------------------------------------------
+// 0.7.0：任务材料（多模态导入后的文本）
+// ---------------------------------------------------------------------------
+
+pub fn attachment_add(
+    conn: &Connection,
+    task_id: i64,
+    file_name: &str,
+    file_path: &str,
+    kind: Option<&str>,
+    size_bytes: Option<i64>,
+    text: Option<&str>,
+    blocks: Option<i64>,
+    truncated: bool,
+    note: Option<&str>,
+) -> Result<i64, String> {
+    let now = chrono::Local::now().to_rfc3339();
+    conn.execute(
+        "INSERT INTO task_attachments(task_id, file_name, file_path, kind, size_bytes, text,
+                                      blocks, truncated, note, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        rusqlite::params![
+            task_id, file_name, file_path, kind, size_bytes, text, blocks,
+            truncated as i64, note, now
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(conn.last_insert_rowid())
+}
+
+pub fn attachments_list(
+    conn: &Connection,
+    task_id: i64,
+) -> Result<Vec<serde_json::Value>, String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, task_id, file_name, file_path, kind, size_bytes, blocks, truncated, note,
+                    LENGTH(COALESCE(text, '')) AS text_len, created_at
+             FROM task_attachments WHERE task_id = ?1 ORDER BY id",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([task_id], |r| {
+            Ok(serde_json::json!({
+                "id": r.get::<_, i64>(0)?,
+                "task_id": r.get::<_, i64>(1)?,
+                "file_name": r.get::<_, String>(2)?,
+                "file_path": r.get::<_, String>(3)?,
+                "kind": r.get::<_, Option<String>>(4)?,
+                "size_bytes": r.get::<_, Option<i64>>(5)?,
+                "blocks": r.get::<_, Option<i64>>(6)?,
+                "truncated": r.get::<_, i64>(7)? == 1,
+                "note": r.get::<_, Option<String>>(8)?,
+                "text_len": r.get::<_, i64>(9)?,
+                "created_at": r.get::<_, String>(10)?,
+            }))
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+pub fn attachment_delete(conn: &Connection, id: i64) -> Result<(), String> {
+    conn.execute("DELETE FROM task_attachments WHERE id = ?1", [id])
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+/// 拼接某任务全部材料的文本（供智能体作为任务材料）
+pub fn attachments_text(conn: &Connection, task_id: i64) -> Result<String, String> {
+    let mut stmt = conn
+        .prepare("SELECT file_name, kind, text FROM task_attachments WHERE task_id = ?1 ORDER BY id")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([task_id], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, Option<String>>(1)?,
+                r.get::<_, Option<String>>(2)?,
+            ))
+        })
+        .map_err(|e| e.to_string())?;
+    let mut out = String::new();
+    for row in rows {
+        let (name, kind, text) = row.map_err(|e| e.to_string())?;
+        let body = text.unwrap_or_default();
+        if body.trim().is_empty() {
+            continue;
+        }
+        out.push_str(&format!(
+            "\n\n【材料：{}（{}）】\n{}",
+            name,
+            kind.unwrap_or_else(|| "未知".into()),
+            body
+        ));
+    }
+    Ok(out.trim().to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn kg_seed_find_query_and_candidate_flow() {
+        let conn = Connection::open_in_memory().expect("打开内存库");
+        migrate(&conn).expect("迁移+种子应成功");
+
+        // ① 图谱已播种（两个案由 + 若干节点/边）
+        let g = kg_list(&conn).unwrap();
+        let cases: Vec<&str> = g["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|n| n["type"] == "case")
+            .map(|n| n["name"].as_str().unwrap())
+            .collect();
+        assert!(cases.contains(&"涉外货物买卖合同纠纷"), "案由缺失：{cases:?}");
+        assert!(cases.contains(&"涉外合资经营合同纠纷"), "案由缺失：{cases:?}");
+
+        // ② 中文任务材料命中涉外案由
+        let ctx = "我方与日本公司签订合资合同，约定双方出资比例与验资程序，日方逾期未出资且拒不召开董事会。";
+        let found = kg_find_case(&conn, ctx).unwrap();
+        assert_eq!(found.as_deref(), Some("涉外合资经营合同纠纷"));
+
+        // ③ 子图非空且含要件/证据
+        let sub = kg_query(&conn, "涉外合资经营合同纠纷").unwrap().expect("子图应存在");
+        let types: Vec<&str> = sub["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|n| n["type"].as_str().unwrap())
+            .collect();
+        assert!(types.contains(&"element") && types.contains(&"evidence"));
+
+        // ④ 候选边：任务命中一部不在该案由已有请求权基础里的法 → 登记；重复登记返回 None
+        let id1 = kg_add_candidate(&conn, "涉外合资经营合同纠纷", "日本国憲法", Some(1)).unwrap();
+        assert!(id1.is_some(), "候选边应登记成功");
+        let id2 = kg_add_candidate(&conn, "涉外合资经营合同纠纷", "日本国憲法", Some(1)).unwrap();
+        assert!(id2.is_none(), "重复候选边不应再登记");
+        // 确认后仍在且 confirmed=1
+        kg_confirm_edge(&conn, id1.unwrap(), true).unwrap();
+        let row: i64 = conn
+            .query_row(
+                "SELECT confirmed FROM kg_edge WHERE id = ?1",
+                [id1.unwrap()],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(row, 1);
+        // 拒绝 = 删除
+        let id3 = kg_add_candidate(&conn, "涉外合资经营合同纠纷", "商法", Some(2)).unwrap().unwrap();
+        kg_confirm_edge(&conn, id3, false).unwrap();
+        let cnt: i64 = conn
+            .query_row("SELECT COUNT(*) FROM kg_edge WHERE id = ?1", [id3], |r| r.get(0))
+            .unwrap();
+        assert_eq!(cnt, 0, "拒绝应删除候选边");
+    }
+
+    #[test]
+    fn attachments_roundtrip_and_concat() {
+        let conn = Connection::open_in_memory().expect("打开内存库");
+        migrate(&conn).expect("迁移应成功");
+        let aid = attachment_add(
+            &conn, 7, "合同.docx", "D:\\x\\合同.docx", Some("docx"), Some(1024),
+            Some("第一条 双方约定……"), Some(3), false, None,
+        )
+        .unwrap();
+        assert!(aid > 0);
+        let list = attachments_list(&conn, 7).unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0]["file_name"], "合同.docx");
+        let txt = attachments_text(&conn, 7).unwrap();
+        assert!(txt.contains("合同.docx") && txt.contains("第一条"));
+        attachment_delete(&conn, aid).unwrap();
+        assert!(attachments_list(&conn, 7).unwrap().is_empty());
+    }
 }

@@ -104,14 +104,91 @@ fn quote(text: &str) -> String {
     )
 }
 
+/// 单元格段落（表头加粗；正文沿用行内格式）
+fn cell_para(text: &str, bold: bool) -> String {
+    let runs = if bold {
+        format!(
+            "<w:r><w:rPr><w:b/></w:rPr><w:t xml:space=\"preserve\">{}</w:t></w:r>",
+            xml_escape(text)
+        )
+    } else {
+        inline_runs(text)
+    };
+    format!("<w:p><w:pPr><w:spacing w:after=\"0\"/></w:pPr>{runs}</w:p>")
+}
+
+/// 一行 Markdown 表格 → 单元格文本
+fn parse_table_row(line: &str) -> Vec<String> {
+    line.trim()
+        .trim_start_matches('|')
+        .trim_end_matches('|')
+        .split('|')
+        .map(|c| c.trim().to_string())
+        .collect()
+}
+
+/// 是否为 Markdown 表格分隔行（| --- | :--: |）
+fn is_table_sep(line: &str) -> bool {
+    let t = line.trim();
+    if !t.starts_with('|') {
+        return false;
+    }
+    let cells = parse_table_row(t);
+    !cells.is_empty()
+        && cells.iter().all(|c| {
+            let body = c.trim().trim_matches(':');
+            !body.is_empty() && body.chars().all(|ch| ch == '-')
+        })
+}
+
+/// Markdown 表格 → WordprocessingML 表格（内联边框，不依赖 styles.xml）
+fn table(rows: &[Vec<String>]) -> String {
+    if rows.is_empty() {
+        return String::new();
+    }
+    const BORDER: &str = "<w:tblBorders>\
+        <w:top w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"BFBFBF\"/>\
+        <w:left w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"BFBFBF\"/>\
+        <w:bottom w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"BFBFBF\"/>\
+        <w:right w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"BFBFBF\"/>\
+        <w:insideH w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"BFBFBF\"/>\
+        <w:insideV w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"BFBFBF\"/>\
+        </w:tblBorders>";
+    let mut xml = format!(
+        "<w:tbl><w:tblPr><w:tblW w:w=\"0\" w:type=\"auto\"/>{BORDER}</w:tblPr>"
+    );
+    for (i, row) in rows.iter().enumerate() {
+        let header = i == 0;
+        xml.push_str("<w:tr>");
+        for cell in row {
+            let shd = if header {
+                "<w:shd w:val=\"clear\" w:color=\"auto\" w:fill=\"F2F2F2\"/>"
+            } else {
+                ""
+            };
+            xml.push_str(&format!(
+                "<w:tc><w:tcPr><w:tcW w:w=\"0\" w:type=\"auto\"/>{shd}</w:tcPr>{}</w:tc>",
+                cell_para(cell, header)
+            ));
+        }
+        xml.push_str("</w:tr>");
+    }
+    xml.push_str("</w:tbl>");
+    // 表格后补一个空段，避免与紧随其后的段落贴合
+    xml.push_str("<w:p/>");
+    xml
+}
+
 /// Markdown（子集）→ WordprocessingML body 内部 XML
 pub fn markdown_to_body(markdown: &str) -> String {
     let mut body = String::new();
     let mut code_buf: Vec<String> = Vec::new();
     let mut in_code = false;
+    let lines: Vec<&str> = markdown.lines().collect();
+    let mut i = 0usize;
 
-    for raw in markdown.lines() {
-        let line = raw.trim_end();
+    while i < lines.len() {
+        let line = lines[i].trim_end();
         let t = line.trim();
         if t.starts_with("```") {
             if in_code {
@@ -121,13 +198,27 @@ pub fn markdown_to_body(markdown: &str) -> String {
             } else {
                 in_code = true;
             }
+            i += 1;
             continue;
         }
         if in_code {
             code_buf.push(line.to_string());
+            i += 1;
             continue;
         }
         if t.is_empty() {
+            i += 1;
+            continue;
+        }
+        // 表格：当前行以 | 开头，且下一行是分隔行
+        if t.starts_with('|') && i + 1 < lines.len() && is_table_sep(lines[i + 1]) {
+            let mut rows: Vec<Vec<String>> = vec![parse_table_row(t)];
+            i += 2; // 跳过表头与分隔行
+            while i < lines.len() && lines[i].trim().starts_with('|') {
+                rows.push(parse_table_row(lines[i].trim()));
+                i += 1;
+            }
+            body.push_str(&table(&rows));
             continue;
         }
         if let Some(rest) = t.strip_prefix("#### ") {
@@ -151,6 +242,7 @@ pub fn markdown_to_body(markdown: &str) -> String {
         } else {
             body.push_str(&para(&inline_runs(t), false));
         }
+        i += 1;
     }
     if in_code && !code_buf.is_empty() {
         body.push_str(&code_block(&code_buf));
@@ -327,4 +419,31 @@ pub fn export_docx(dir: &Path, title: &str, markdown: &str) -> Result<std::path:
     f.write_all(&bytes).map_err(|e| format!("写入 docx 失败：{e}"))?;
     f.flush().map_err(|e| format!("写入 docx 失败：{e}"))?;
     Ok(path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn markdown_table_renders_word_table() {
+        let md = "## 证据目录\n\n| 序号 | 证据名称 | 证明对象 |\n| --- | --- | --- |\n| 1 | 合同 | 合同成立 |\n| 2 | 提单 | 交付 |\n";
+        let body = markdown_to_body(md);
+        assert!(body.contains("<w:tbl>"), "应生成表格：{body}");
+        assert_eq!(body.matches("<w:tr>").count(), 3, "表头 + 2 数据行");
+        assert!(body.contains("证据名称"), "表头文字应在：{body}");
+        assert!(body.contains("提单"), "数据应在：{body}");
+        // 表头行加粗
+        let head_xml = &body[body.find("<w:tr>").unwrap()..body.find("</w:tbl>").unwrap()];
+        assert!(head_xml.contains("<w:b/>"), "表头应加粗：{head_xml}");
+    }
+
+    #[test]
+    fn docx_bytes_is_a_zip_with_document_xml() {
+        let bytes = docx_bytes("测试", "# 标题\n\n正文段落\n");
+        // 本地文件头签名 PK\x03\x04
+        assert_eq!(&bytes[0..4], &[0x50, 0x4B, 0x03, 0x04]);
+        let as_text = String::from_utf8_lossy(&bytes);
+        assert!(as_text.contains("word/document.xml"), "应包含 document.xml 条目名");
+    }
 }
