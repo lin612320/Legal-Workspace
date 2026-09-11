@@ -551,30 +551,12 @@ fn templates_delete(conn: State<'_, DbState>, id: i64) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
+// 版块 6 待办：SQL 统一收敛到 db.rs（便于单测；done / desktop_popup 是 NOT NULL 列，
+// 必须写 0/1 —— 历史实现用 bool::then_some(1)，false 会写成 NULL 导致「取消勾选」报错）。
+
 #[tauri::command]
 fn todos_list(conn: State<'_, DbState>) -> Result<Vec<Value>, String> {
-    let c = conn.lock().unwrap();
-    let mut stmt = c
-        .prepare(
-            "SELECT id, title, note, due_at, remind_minutes, desktop_popup, done, created_at
-             FROM todos ORDER BY created_at DESC",
-        )
-        .map_err(|e| e.to_string())?;
-    let rows = stmt
-        .query_map([], |r| {
-            Ok(json!({
-                "id": r.get::<_, i64>(0)?,
-                "title": r.get::<_, String>(1)?,
-                "note": r.get::<_, Option<String>>(2)?,
-                "due_at": r.get::<_, Option<String>>(3)?,
-                "remind_minutes": r.get::<_, i64>(4)?,
-                "desktop_popup": r.get::<_, i64>(5)? == 1,
-                "done": r.get::<_, i64>(6)? == 1,
-                "created_at": r.get::<_, String>(7)?,
-            }))
-        })
-        .map_err(|e| e.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+    db::todos_list(&conn.lock().unwrap())
 }
 
 #[tauri::command]
@@ -586,22 +568,14 @@ fn todos_create(
     remind_minutes: Option<i64>,
     desktop_popup: Option<bool>,
 ) -> Result<i64, String> {
-    let c = conn.lock().unwrap();
-    let created_at = chrono::Local::now().to_rfc3339();
-    c.execute(
-        "INSERT INTO todos(title, note, due_at, remind_minutes, desktop_popup, done, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, 0, ?6)",
-        rusqlite::params![
-            title,
-            note,
-            due_at,
-            remind_minutes.unwrap_or(0),
-            desktop_popup.unwrap_or(true).then_some(1),
-            created_at,
-        ],
+    db::todo_create(
+        &conn.lock().unwrap(),
+        &title,
+        note.as_deref(),
+        due_at.as_deref(),
+        remind_minutes.unwrap_or(0),
+        desktop_popup.unwrap_or(true),
     )
-    .map_err(|e| e.to_string())?;
-    Ok(c.last_insert_rowid())
 }
 
 #[tauri::command]
@@ -611,19 +585,10 @@ fn todos_update(
     done: Option<bool>,
     title: Option<String>,
 ) -> Result<(), String> {
-    let c = conn.lock().unwrap();
-    if let Some(d) = done {
-        c.execute("UPDATE todos SET done = ?1 WHERE id = ?2", [d.then_some(1), Some(id)])
-            .map_err(|e| e.to_string())?;
-    }
-    if let Some(t) = title {
-        c.execute("UPDATE todos SET title = ?1 WHERE id = ?2", [t, id.to_string()])
-            .map_err(|e| e.to_string())?;
-    }
-    Ok(())
+    db::todo_update(&conn.lock().unwrap(), id, done, title.as_deref())
 }
 
-/// 全字段保存：编辑待办（备注/到期/提醒/弹窗/完成状态）。
+/// 全字段保存：编辑待办（备注/到期/提醒/弹窗/完成状态）。done=false 落 0，取消勾选正常。
 #[tauri::command]
 fn todos_save(
     conn: State<'_, DbState>,
@@ -635,33 +600,21 @@ fn todos_save(
     desktop_popup: bool,
     done: bool,
 ) -> Result<(), String> {
-    conn.lock()
-        .unwrap()
-        .execute(
-            "UPDATE todos SET title = ?1, note = ?2, due_at = ?3,
-                    remind_minutes = ?4, desktop_popup = ?5, done = ?6
-             WHERE id = ?7",
-            rusqlite::params![
-                title,
-                note,
-                due_at,
-                remind_minutes,
-                desktop_popup.then_some(1),
-                done.then_some(1),
-                id,
-            ],
-        )
-        .map(|_| ())
-        .map_err(|e| e.to_string())
+    db::todo_save(
+        &conn.lock().unwrap(),
+        id,
+        &title,
+        note.as_deref(),
+        due_at.as_deref(),
+        remind_minutes,
+        desktop_popup,
+        done,
+    )
 }
 
 #[tauri::command]
 fn todos_delete(conn: State<'_, DbState>, id: i64) -> Result<(), String> {
-    conn.lock()
-        .unwrap()
-        .execute("DELETE FROM todos WHERE id = ?1", [id])
-        .map(|_| ())
-        .map_err(|e| e.to_string())
+    db::todo_delete(&conn.lock().unwrap(), id)
 }
 
 // ---------------------------------------------------------------------------
@@ -840,6 +793,61 @@ fn extract_material(path: String) -> Result<Value, String> {
     let p = std::path::Path::new(&path);
     if !p.exists() { return Err("文件不存在".into()); }
     let e = office::extract_office_text(p)?;
+    Ok(json!({
+        "kind": e.kind, "text": e.text, "blocks": e.blocks,
+        "truncated": e.truncated, "note": e.note,
+    }))
+}
+
+/// 0.7.1：按「文件名 + base64 内容」提取办公文档文本。
+///
+/// 前端 `<input type="file">` 拿到的是文件内容而不是绝对路径（WebView 不暴露路径），
+/// 因此这里把字节临时落盘 → 复用 office::extract_office_text → 立即删除临时文件。
+/// 仅服务「翻译 → 导入文档全文翻译」，PDF / 图片仍由支持文件/视觉输入的模型处理。
+#[tauri::command]
+fn extract_material_b64(file_name: String, data_b64: String) -> Result<Value, String> {
+    use base64::Engine as _;
+
+    // 容忍 data URL 形式（data:...;base64,xxxx）
+    let payload = match data_b64.find(";base64,") {
+        Some(i) => &data_b64[i + ";base64,".len()..],
+        None => data_b64.as_str(),
+    };
+    let raw = base64::engine::general_purpose::STANDARD
+        .decode(payload.trim().as_bytes())
+        .map_err(|e| format!("文件内容解码失败：{e}"))?;
+    if raw.is_empty() {
+        return Err("文件内容为空".into());
+    }
+    if raw.len() > 60 * 1024 * 1024 {
+        return Err("文件超过 60 MB 上限，请拆分后再试".into());
+    }
+
+    // 文件名只保留安全字符，避免路径穿越
+    let mut safe: String = file_name
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    if safe.trim_matches(|c| c == '_' || c == '.').is_empty() {
+        safe = "upload.bin".to_string();
+    }
+
+    let dir = std::env::temp_dir().join("faron-uploads");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("创建临时目录失败：{e}"))?;
+    let stamp = chrono::Local::now().format("%Y%m%d%H%M%S%3f");
+    let path = dir.join(format!("{stamp}-{safe}"));
+    std::fs::write(&path, &raw).map_err(|e| format!("写入临时文件失败：{e}"))?;
+
+    let extracted = office::extract_office_text(&path);
+    let _ = std::fs::remove_file(&path);
+    let e = extracted?;
+
     Ok(json!({
         "kind": e.kind, "text": e.text, "blocks": e.blocks,
         "truncated": e.truncated, "note": e.note,
@@ -1264,10 +1272,7 @@ fn check_todo_notifications(app: &AppHandle) {
 
     for (id, title, due_at) in pending {
         // 记录已提醒的到期时间，避免同一到期时间重复提醒
-        let _ = conn.execute(
-            "UPDATE todos SET last_notified_due = ?1 WHERE id = ?2",
-            rusqlite::params![due_at, id],
-        );
+        let _ = db::todo_mark_notified(&conn, id, &due_at);
         let _ = app
             .notification()
             .builder()
@@ -1431,6 +1436,7 @@ pub fn run() {
             import_excel,
             // 任务材料文本提取（docx / pptx / xlsx / txt / md / csv；pdf 与图片走模型）
             extract_material,
+            extract_material_b64,
             // 智能体（数字员工）：文书交付物与任务状态机
             law_by_id,
             documents_list,
@@ -1472,4 +1478,32 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn b64(s: &[u8]) -> String {
+        use base64::Engine as _;
+        base64::engine::general_purpose::STANDARD.encode(s)
+    }
+
+    /// 0.7.1：翻译页「导入文档」用的按字节提取（txt 走 office 的文本读取）
+    #[test]
+    fn extract_material_b64_reads_text_payload() {
+        let v = extract_material_b64("note.txt".into(), b64("第一行\n\n第二行".as_bytes()))
+            .expect("纯文本应能提取成功");
+        assert_eq!(v["kind"], "txt");
+        assert!(v["text"].as_str().unwrap_or_default().contains("第二行"));
+    }
+
+    /// 容忍 data URL 前缀；非法 base64 必须报错而不是静默返回空文本
+    #[test]
+    fn extract_material_b64_accepts_data_url_and_rejects_bad_input() {
+        let data_url = format!("data:text/markdown;base64,{}", b64("# 标题".as_bytes()));
+        assert!(extract_material_b64("a.md".into(), data_url).is_ok());
+        assert!(extract_material_b64("a.md".into(), "!!!not-base64!!!".into()).is_err());
+        assert!(extract_material_b64("a.txt".into(), b64(b"").into()).is_err());
+    }
 }

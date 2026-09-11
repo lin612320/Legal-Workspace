@@ -1707,6 +1707,183 @@ pub fn attachments_text(conn: &Connection, task_id: i64) -> Result<String, Strin
     Ok(out.trim().to_string())
 }
 
+// ---------------------------------------------------------------------------
+// 版块 6：待办提醒（todos）
+//
+// ⚠️ 布尔落库口径：`done` / `desktop_popup` 在表结构里是 `INTEGER NOT NULL`，
+// 必须显式写 0/1。历史实现用 `bool::then_some(1)`——`false` 会写成 NULL，
+// 于是「取消勾选」报 `NOT NULL constraint failed: todos.done`。
+// 所有 todos 写入统一走本节的 flag()，并把底层报错转成可读文案。
+// ---------------------------------------------------------------------------
+
+/// 布尔 → SQLite 整数（NOT NULL 列必须显式 0/1，不能靠 NULL 当 false）
+fn flag(v: bool) -> i64 {
+    if v {
+        1
+    } else {
+        0
+    }
+}
+
+/// SQLite 原始报错 → 用户可读中文（避免把 "NOT NULL constraint failed: todos.done" 直接抛到界面）
+pub fn friendly_db_err(raw: &str) -> String {
+    if let Some(col) = raw.strip_prefix("NOT NULL constraint failed: ") {
+        let name = match col.trim() {
+            "todos.done" | "todos.done." => "完成状态",
+            "todos.desktop_popup" => "桌面弹窗开关",
+            "todos.remind_minutes" => "提前提醒分钟数",
+            "todos.title" => "待办标题",
+            "todos.created_at" => "创建时间",
+            other => other,
+        };
+        return format!("{name}不能为空（数据列约束）；请重试一次，若仍失败可删除该条待办后重新添加。");
+    }
+    if raw.starts_with("UNIQUE constraint failed") {
+        return "该记录已存在，无需重复添加。".into();
+    }
+    if raw.contains("database is locked") || raw.contains("database table is locked") {
+        return "数据库正被占用（可能有另一个窗口在写入），请稍后重试。".into();
+    }
+    if raw.contains("no such table") || raw.contains("no such column") {
+        return "数据表或字段缺失，数据库可能未正确初始化；可到「数据设置」从备份还原。".into();
+    }
+    if raw.contains("readonly") || raw.contains("read-only") {
+        return "数据库为只读（可能目录权限受限或被其它程序占用），请检查数据目录权限。".into();
+    }
+    if raw.contains("disk I/O error") || raw.contains("disk full") {
+        return "磁盘写入失败（空间不足或磁盘异常），请检查磁盘后重试。".into();
+    }
+    format!("数据库操作失败：{raw}")
+}
+
+fn friendly(e: rusqlite::Error) -> String {
+    friendly_db_err(&e.to_string())
+}
+
+/// 待办列表（按创建时间倒序）
+pub fn todos_list(conn: &Connection) -> Result<Vec<serde_json::Value>, String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, title, note, due_at, remind_minutes, desktop_popup, done, created_at
+             FROM todos ORDER BY created_at DESC",
+        )
+        .map_err(friendly)?;
+    let rows = stmt
+        .query_map([], |r| {
+            Ok(serde_json::json!({
+                "id": r.get::<_, i64>(0)?,
+                "title": r.get::<_, String>(1)?,
+                "note": r.get::<_, Option<String>>(2)?,
+                "due_at": r.get::<_, Option<String>>(3)?,
+                "remind_minutes": r.get::<_, i64>(4)?,
+                "desktop_popup": r.get::<_, i64>(5)? == 1,
+                "done": r.get::<_, i64>(6)? == 1,
+                "created_at": r.get::<_, String>(7)?,
+            }))
+        })
+        .map_err(friendly)?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(friendly)
+}
+
+/// 新建待办，返回自增 id
+pub fn todo_create(
+    conn: &Connection,
+    title: &str,
+    note: Option<&str>,
+    due_at: Option<&str>,
+    remind_minutes: i64,
+    desktop_popup: bool,
+) -> Result<i64, String> {
+    let created_at = chrono::Local::now().to_rfc3339();
+    conn.execute(
+        "INSERT INTO todos(title, note, due_at, remind_minutes, desktop_popup, done, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, 0, ?6)",
+        rusqlite::params![
+            title,
+            note,
+            due_at,
+            remind_minutes.max(0),
+            flag(desktop_popup),
+            created_at
+        ],
+    )
+    .map_err(friendly)?;
+    Ok(conn.last_insert_rowid())
+}
+
+/// 全字段保存（前端传整行，故为覆盖写；done=false 写 0 而不是 NULL）
+pub fn todo_save(
+    conn: &Connection,
+    id: i64,
+    title: &str,
+    note: Option<&str>,
+    due_at: Option<&str>,
+    remind_minutes: i64,
+    desktop_popup: bool,
+    done: bool,
+) -> Result<(), String> {
+    let affected = conn
+        .execute(
+            "UPDATE todos SET title = ?1, note = ?2, due_at = ?3,
+                    remind_minutes = ?4, desktop_popup = ?5, done = ?6
+             WHERE id = ?7",
+            rusqlite::params![
+                title,
+                note,
+                due_at,
+                remind_minutes.max(0),
+                flag(desktop_popup),
+                flag(done),
+                id
+            ],
+        )
+        .map_err(friendly)?;
+    if affected == 0 {
+        return Err(format!("待办不存在（id={id}），可能已被删除，请刷新页面后重试。"));
+    }
+    Ok(())
+}
+
+/// 局部更新（保留兼容：仅 done / title）
+pub fn todo_update(
+    conn: &Connection,
+    id: i64,
+    done: Option<bool>,
+    title: Option<&str>,
+) -> Result<(), String> {
+    if let Some(d) = done {
+        conn.execute(
+            "UPDATE todos SET done = ?1 WHERE id = ?2",
+            rusqlite::params![flag(d), id],
+        )
+        .map_err(friendly)?;
+    }
+    if let Some(t) = title {
+        conn.execute(
+            "UPDATE todos SET title = ?1 WHERE id = ?2",
+            rusqlite::params![t, id],
+        )
+        .map_err(friendly)?;
+    }
+    Ok(())
+}
+
+pub fn todo_delete(conn: &Connection, id: i64) -> Result<(), String> {
+    conn.execute("DELETE FROM todos WHERE id = ?1", [id])
+        .map(|_| ())
+        .map_err(friendly)
+}
+
+/// 记录「已按该到期时间提醒过」，避免同一到期时间重复弹窗
+pub fn todo_mark_notified(conn: &Connection, id: i64, due_at: &str) -> Result<(), String> {
+    conn.execute(
+        "UPDATE todos SET last_notified_due = ?1 WHERE id = ?2",
+        rusqlite::params![due_at, id],
+    )
+    .map(|_| ())
+    .map_err(friendly)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1784,5 +1961,60 @@ mod tests {
         assert!(txt.contains("合同.docx") && txt.contains("第一条"));
         attachment_delete(&conn, aid).unwrap();
         assert!(attachments_list(&conn, 7).unwrap().is_empty());
+    }
+
+    /// 回归：`done` / `desktop_popup` 是 NOT NULL 列，false 必须写 0 而不是 NULL
+    ///（历史 bug：取消勾选报 `NOT NULL constraint failed: todos.done`；
+    ///  新建时关掉「桌面弹窗」同理报错）
+    #[test]
+    fn todos_create_save_and_uncheck_roundtrip() {
+        let conn = Connection::open_in_memory().expect("打开内存库");
+        migrate(&conn).expect("迁移应成功");
+        let due = "2026-09-12T09:00:00+08:00";
+
+        // ① 新建：桌面弹窗关闭（false → 0）
+        let id = todo_create(&conn, "提交答辩状", Some("附件见邮件"), Some(due), 30, false)
+            .expect("新建待办（弹窗关闭）应成功");
+        let row = todos_list(&conn).unwrap().remove(0);
+        assert_eq!(row["desktop_popup"], false, "desktop_popup 应落 0");
+        assert_eq!(row["done"], false);
+        assert_eq!(row["remind_minutes"], 30);
+        assert_eq!(row["due_at"], due);
+
+        // ② 勾选完成
+        todo_save(&conn, id, "提交答辩状", Some("附件见邮件"), Some(due), 30, false, true)
+            .expect("勾选完成应成功");
+        assert_eq!(todos_list(&conn).unwrap()[0]["done"], true);
+
+        // ③ 取消勾选（本次报错现场）
+        todo_save(&conn, id, "提交答辩状", Some("附件见邮件"), Some(due), 30, false, false)
+            .expect("取消勾选必须成功");
+        assert_eq!(todos_list(&conn).unwrap()[0]["done"], false, "取消勾选后应落 0");
+
+        // ④ 重新打开桌面弹窗（false→true 也要能落 1）；备注清空走可空列
+        todo_save(&conn, id, "提交答辩状", None, Some(due), 0, true, false).unwrap();
+        let row = &todos_list(&conn).unwrap()[0];
+        assert_eq!(row["desktop_popup"], true);
+        assert_eq!(row["note"], serde_json::Value::Null);
+
+        // ⑤ 局部更新 / 已提醒标记 / 不存在的 id / 删除
+        todo_update(&conn, id, Some(true), Some("已改名")).unwrap();
+        assert_eq!(todos_list(&conn).unwrap()[0]["title"], "已改名");
+        todo_mark_notified(&conn, id, due).unwrap();
+
+        let err = todo_save(&conn, 9999, "x", None, None, 0, true, false).unwrap_err();
+        assert!(err.contains("待办不存在"), "错误文案应可读：{err}");
+
+        todo_delete(&conn, id).unwrap();
+        assert!(todos_list(&conn).unwrap().is_empty());
+    }
+
+    #[test]
+    fn friendly_db_err_maps_raw_sqlite_messages() {
+        let msg = friendly_db_err("NOT NULL constraint failed: todos.done");
+        assert!(msg.contains("完成状态"), "应翻译成可读文案：{msg}");
+        assert!(friendly_db_err("database is locked").contains("占用"));
+        assert!(friendly_db_err("no such table: todos").contains("数据表"));
+        assert!(friendly_db_err("随便什么错").starts_with("数据库操作失败："));
     }
 }

@@ -37,7 +37,8 @@ export function useTemplates() {
         title: input.title,
         category: input.category,
         content: input.content,
-        file_type: input.file_type,
+        // Tauri v2 参数名按 camelCase 读取（Rust 侧 file_type）
+        fileType: input.file_type,
       });
       const list = (await callRust<Template[]>("templates_list")) ?? [];
       setTemplates(list);

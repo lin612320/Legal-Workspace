@@ -10,6 +10,8 @@ export default function TodoPage() {
   const [filter, setFilter] = useState<Filter>("all");
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
 
   // 到期：due_at 未完成且已过时间（提醒时间前的也算临近）
   const isOverdue = (t: Todo): boolean =>
@@ -46,15 +48,44 @@ export default function TodoPage() {
   );
 
   async function handleCreate() {
-    if (!form.title.trim()) return;
-    await create({
-      title: form.title.trim(),
-      note: form.note.trim() ? form.note.trim() : undefined,
-      due_at: form.due_at ? new Date(form.due_at).toISOString() : null,
-      remind_minutes: form.remind_minutes,
-      desktop_popup: form.desktop_popup,
-    });
-    setForm({ ...EMPTY_FORM });
+    if (!form.title.trim() || busy) return;
+    setBusy(true);
+    setMsg(null);
+    try {
+      await create({
+        title: form.title.trim(),
+        note: form.note.trim() ? form.note.trim() : undefined,
+        due_at: form.due_at ? new Date(form.due_at).toISOString() : null,
+        remind_minutes: form.remind_minutes,
+        desktop_popup: form.desktop_popup,
+      });
+      // 新增后立即上屏（列表 + 首页统计同步刷新）
+      setForm({ ...EMPTY_FORM });
+      setMsg({ type: "ok", text: "已添加待办，列表已即时更新。" });
+    } catch (e) {
+      setMsg({ type: "err", text: `保存失败：${e instanceof Error ? e.message : String(e)}` });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** 勾选 / 取消勾选：写入失败时提示，避免「看着打勾了但没存进去」 */
+  async function handleToggle(id: number, done: boolean) {
+    setMsg(null);
+    try {
+      await toggle(id, done);
+    } catch (e) {
+      setMsg({ type: "err", text: `状态保存失败：${e instanceof Error ? e.message : String(e)}` });
+    }
+  }
+
+  async function handleRemove(id: number) {
+    setMsg(null);
+    try {
+      await remove(id);
+    } catch (e) {
+      setMsg({ type: "err", text: `删除失败：${e instanceof Error ? e.message : String(e)}` });
+    }
   }
 
   return (
@@ -105,10 +136,12 @@ export default function TodoPage() {
             <span>启用桌面弹窗提醒</span>
           </label>
         </div>
-        <button className="primary" onClick={handleCreate} disabled={!form.title.trim()}>
-          添加待办
+        <button className="primary" onClick={() => void handleCreate()} disabled={!form.title.trim() || busy}>
+          {busy ? "保存中…" : "添加待办"}
         </button>
       </div>
+
+      {msg && <div className={`settings-msg ${msg.type}`}>{msg.text}</div>}
 
       {/* 筛选 + 列表 */}
       <div className="todo-list-bar">
@@ -135,7 +168,16 @@ export default function TodoPage() {
       ) : filtered.length === 0 ? (
         <div className="card empty">这里还没有待办，先在顶部添加一个。</div>
       ) : (
-        filtered.map((t) => <TodoRow key={t.id} t={t} isOverdue={isOverdue} isDueSoon={isDueSoon} />)
+        filtered.map((t) => (
+          <TodoRow
+            key={t.id}
+            t={t}
+            isOverdue={isOverdue}
+            isDueSoon={isDueSoon}
+            onToggle={handleToggle}
+            onRemove={handleRemove}
+          />
+        ))
       )}
 
       {/* 编辑面板：由父组件传入当前编辑对象，按 id 重置表单 */}
@@ -149,10 +191,14 @@ export default function TodoPage() {
     t,
     isOverdue,
     isDueSoon,
+    onToggle,
+    onRemove,
   }: {
     t: Todo;
     isOverdue: (t: Todo) => boolean;
     isDueSoon: (t: Todo) => boolean;
+    onToggle: (id: number, done: boolean) => void | Promise<void>;
+    onRemove: (id: number) => void | Promise<void>;
   }) {
     const overdue = isOverdue(t);
     const soon = isDueSoon(t);
@@ -161,7 +207,7 @@ export default function TodoPage() {
         <input
           type="checkbox"
           checked={t.done}
-          onChange={(e) => toggle(t.id, e.target.checked)}
+          onChange={(e) => void onToggle(t.id, e.target.checked)}
         />
         <div className="todo-main">
           <div className="todo-title">{t.title}</div>
@@ -179,7 +225,7 @@ export default function TodoPage() {
           <button className="ghost-btn" onClick={() => setEditingId(t.id)}>
             编辑
           </button>
-          <button className="danger-btn" onClick={() => remove(t.id)}>
+          <button className="danger-btn" onClick={() => void onRemove(t.id)}>
             删除
           </button>
         </div>
@@ -202,6 +248,8 @@ function EditPanel({
   const [due_at, setDue] = useState(t.due_at ? toLocalInput(t.due_at) : "");
   const [remind, setRemind] = useState<number>(t.remind_minutes);
   const [popup, setPopup] = useState<boolean>(t.desktop_popup);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
 
   return (
     <div className="card edit-panel">
@@ -240,23 +288,33 @@ function EditPanel({
       <div className="edit-actions">
         <button
           className="primary"
+          disabled={saving}
           onClick={async () => {
-            await onSave(t.id, {
-              title: title.trim() || t.title,
-              note: note.trim() ? note.trim() : null,
-              due_at: due_at ? new Date(due_at).toISOString() : null,
-              remind_minutes: remind,
-              desktop_popup: popup,
-            });
-            onClose();
+            setSaving(true);
+            setErr("");
+            try {
+              await onSave(t.id, {
+                title: title.trim() || t.title,
+                note: note.trim() ? note.trim() : null,
+                due_at: due_at ? new Date(due_at).toISOString() : null,
+                remind_minutes: remind,
+                desktop_popup: popup,
+              });
+              onClose();
+            } catch (e) {
+              setErr(e instanceof Error ? e.message : String(e));
+            } finally {
+              setSaving(false);
+            }
           }}
         >
-          保存
+          {saving ? "保存中…" : "保存"}
         </button>
         <button className="ghost-btn" onClick={onClose}>
           取消
         </button>
       </div>
+      {err && <div className="settings-msg err" style={{ marginTop: 10 }}>保存失败：{err}</div>}
     </div>
   );
 }

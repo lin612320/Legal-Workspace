@@ -6,8 +6,18 @@ import { useDocuments } from "../hooks/useDocuments";
 import { openPathFile } from "../lib/open";
 
 export default function Home() {
-  const { todos, toggle } = useTodos();
+  const { todos, toggle, refresh } = useTodos();
   const { docs, remove: removeDoc } = useDocuments();
+
+  /** 勾选首页待办：写库失败时给出可见提示（完成后统计立即归零） */
+  async function handleToggle(id: number, done: boolean) {
+    try {
+      await toggle(id, done);
+    } catch (e) {
+      window.alert(`状态保存失败：${e instanceof Error ? e.message : String(e)}`);
+      await refresh();
+    }
+  }
 
   const pending = useMemo(
     () =>
@@ -73,7 +83,7 @@ export default function Home() {
                     type="checkbox"
                     checked={t.done}
                     onChange={(e) => {
-                      void toggle(t.id, e.target.checked);
+                      void handleToggle(t.id, e.target.checked);
                     }}
                   />
                   <span className="mini-title">{t.title}</span>
