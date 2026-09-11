@@ -12,7 +12,7 @@
 
 import type { AIConfig, FunctionTool } from "./ai";
 import { chatStreamOnce, requestStructuredJson, SYSTEM_PROMPTS } from "./ai";
-import { buildTools, localDocSave, type LawRef, type ToolResult } from "./tools";
+import { buildTools, localDocSave, setToolAIConfig, type LawRef, type ToolResult } from "./tools";
 import { callRust, isTauri } from "./tauri";
 import { embedTexts, cosine } from "./embed";
 import { describeSkeleton, loadSkeleton, type KgSkeleton } from "./kg";
@@ -373,6 +373,9 @@ export async function executeStep(
 ): Promise<void> {
   const set = (patch: Partial<AgentStep>) => Object.assign(step, patch);
   set({ status: "running", started_at: new Date().toISOString() });
+
+  // 把当前 AI 配置注入工具层（翻译工具等需要走同一接口）
+  setToolAIConfig(cfg);
 
   // 需要人工确认的步骤：先停住（已放行过的步骤不再拦截，否则「继续」会无限回到 waiting）
   if (step.need_confirm && !step.confirmed) {
@@ -785,7 +788,8 @@ export async function deliverTask(task: AgentTask): Promise<{ path?: string; ok:
       const docId = await callRust<number>("document_save", {
         title,
         content: md,
-        file_path: r.path,
+        // Tauri v2 参数名按 camelCase 读取（Rust 侧 file_path）
+        filePath: r.path,
         kind: "docx",
         meta: JSON.stringify({ taskId: task.id ?? null, kind: task.kind }),
       });
@@ -793,7 +797,7 @@ export async function deliverTask(task: AgentTask): Promise<{ path?: string; ok:
         await callRust<void>("task_artifact_add", {
           taskId: task.id,
           kind: "docx",
-          file_path: r.path,
+          filePath: r.path,
           title,
           content: md,
         });

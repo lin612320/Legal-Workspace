@@ -9,8 +9,21 @@
 import { Law, SAMPLE_LAWS } from "../data/laws";
 import { readLocalTemplates } from "../data/templates";
 import { callRust, isTauri } from "./tauri";
-import type { FunctionTool } from "./ai";
-import { translateFree } from "./translate";
+import type { AIConfig, FunctionTool } from "./ai";
+import { configHint, isConfigured, langLabel, translateText } from "./translate";
+
+// ---------------------------------------------------------------------------
+// 工具可用的 AI 配置（由 agent 执行步骤时注入）
+//
+// 翻译工具已统一走「数据设置 → AI 接口」，不再使用任何免费接口；
+// 执行器（agent.executeStep）在跑工具前调用 setToolAIConfig 注入当前配置。
+// ---------------------------------------------------------------------------
+
+let toolAiCfg: AIConfig | null = null;
+
+export function setToolAIConfig(cfg: AIConfig | null): void {
+  toolAiCfg = cfg;
+}
 
 // ---------------------------------------------------------------------------
 // 类型
@@ -246,8 +259,10 @@ async function runTranslate(args: any): Promise<ToolResult> {
   const text = String(args?.text ?? "").trim();
   const target = String(args?.target ?? "中文").trim();
   if (!text) return { ok: false, text: "没有待翻译文本。" };
+  if (!isConfigured(toolAiCfg)) return { ok: false, text: `翻译不可用：${configHint()}` };
   try {
-    const out = await translateFree(text, "auto", langCodeOf(target));
+    // 与「翻译」版块同一条通道：AI 接口，长文自动分块
+    const out = await translateText(toolAiCfg!, text, "自动检测", langLabel(langCodeOf(target)));
     return { ok: true, text: `翻译（目标：${target}）：\n${out}` };
   } catch (e) {
     return { ok: false, text: `翻译失败：${e instanceof Error ? e.message : String(e)}` };
@@ -327,7 +342,7 @@ const IMPLS: ToolImpl[] = [
   },
   {
     name: "translate_text",
-    description: "翻译一小段文字（内置免费接口，无需 Key）。",
+    description: "翻译一段文字（走「数据设置 → AI 接口」配置的模型，需已填写 base_url 与 API Key）。",
     parameters: {
       type: "object",
       properties: {

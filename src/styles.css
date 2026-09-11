@@ -713,6 +713,53 @@ button.primary.danger:hover {
   font-weight: 600;
 }
 
+/* 翻译：说明 / 提示 / 文档导入 / 操作条（v0.7.1 文档翻译） */
+.translate-page .hint {
+  font-size: 12.5px;
+  line-height: 1.7;
+  margin: 8px 0 0;
+}
+
+.translate-warn {
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  border: 1px solid #f0d98a;
+  border-radius: 8px;
+  background: #fff8e6;
+  color: #8a6d1a;
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.translate-doc-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.translate-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.translate-out {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.translate-out .mini-path {
+  flex: 1;
+  min-width: 0;
+  word-break: break-all;
+}
+
 .dual-pane {
   display: grid;
   grid-template-columns: 1fr 1fr;

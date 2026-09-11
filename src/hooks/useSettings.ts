@@ -9,9 +9,6 @@ export const KEYS = {
   aiBaseUrl: "ai.base_url",
   aiApiKey: "ai.api_key",
   aiModel: "ai.model",
-  translateProvider: "translate.provider", // "free" | "paid"
-  translateApiKey: "translate.api_key",
-  translateBaseUrl: "translate.base_url",
   backupAuto: "backup.auto", // "1" | "0"
   backupIntervalDays: "backup.interval_days",
   backupTargetDir: "backup.target_dir",
@@ -20,12 +17,8 @@ export const KEYS = {
 
 export interface SettingsState {
   loaded: boolean;
+  /** AI 接口：文书智能体 / 翻译 / 文档翻译 / 多模态转录统一共用 */
   ai: { baseUrl: string; apiKey: string; model: string };
-  translate: {
-    provider: string;
-    apiKey: string;
-    baseUrl: string;
-  };
   backup: {
     auto: boolean;
     intervalDays: number;
@@ -36,8 +29,7 @@ export interface SettingsState {
 
 const DEFAULTS: SettingsState = {
   loaded: false,
-  ai: { baseUrl: "", apiKey: "", model: "gpt-4o-mini" },
-  translate: { provider: "free", apiKey: "", baseUrl: "" },
+  ai: { baseUrl: "", apiKey: "", model: "deepseek-chat" },
   backup: { auto: false, intervalDays: 7, targetDir: "" },
   defaultDesktopPopup: true,
 };
@@ -45,7 +37,7 @@ const DEFAULTS: SettingsState = {
 const LS_KEY = "workbench:settings";
 
 /** 需加密落盘的设置键（API Key 类） */
-const SECRET_KEYS: string[] = [KEYS.aiApiKey, KEYS.translateApiKey];
+const SECRET_KEYS: string[] = [KEYS.aiApiKey];
 
 const isSecretKey = (k: string) => SECRET_KEYS.includes(k);
 
@@ -74,9 +66,6 @@ export function useSettings() {
         KEYS.aiBaseUrl,
         KEYS.aiApiKey,
         KEYS.aiModel,
-        KEYS.translateProvider,
-        KEYS.translateApiKey,
-        KEYS.translateBaseUrl,
         KEYS.backupAuto,
         KEYS.backupIntervalDays,
         KEYS.backupTargetDir,
@@ -105,11 +94,6 @@ export function useSettings() {
           baseUrl: map[KEYS.aiBaseUrl] ?? DEFAULTS.ai.baseUrl,
           apiKey: map[KEYS.aiApiKey] ?? DEFAULTS.ai.apiKey,
           model: map[KEYS.aiModel] ?? DEFAULTS.ai.model,
-        },
-        translate: {
-          provider: map[KEYS.translateProvider] ?? DEFAULTS.translate.provider,
-          apiKey: map[KEYS.translateApiKey] ?? DEFAULTS.translate.apiKey,
-          baseUrl: map[KEYS.translateBaseUrl] ?? DEFAULTS.translate.baseUrl,
         },
         backup: {
           auto: (map[KEYS.backupAuto] ?? "0") === "1",
@@ -142,16 +126,6 @@ export function useSettings() {
       if (patch.baseUrl !== undefined) void persist(KEYS.aiBaseUrl, patch.baseUrl);
       if (patch.apiKey !== undefined) void persist(KEYS.aiApiKey, patch.apiKey);
       if (patch.model !== undefined) void persist(KEYS.aiModel, patch.model);
-    },
-    [persist],
-  );
-
-  const setTranslate = useCallback(
-    (patch: Partial<SettingsState["translate"]>) => {
-      setS((prev) => ({ ...prev, translate: { ...prev.translate, ...patch } }));
-      if (patch.provider !== undefined) void persist(KEYS.translateProvider, patch.provider);
-      if (patch.apiKey !== undefined) void persist(KEYS.translateApiKey, patch.apiKey);
-      if (patch.baseUrl !== undefined) void persist(KEYS.translateBaseUrl, patch.baseUrl);
     },
     [persist],
   );
@@ -206,5 +180,5 @@ export function useSettings() {
 
   const notify = useCallback((type: "ok" | "err", text: string) => setMsg({ type, text }), []);
 
-  return { s, setAI, setTranslate, setBackup, setDefaultPopup, backupNow, restore, notify, msg, setMsg };
+  return { s, setAI, setBackup, setDefaultPopup, backupNow, restore, notify, msg, setMsg };
 }

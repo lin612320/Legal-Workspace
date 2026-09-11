@@ -2,8 +2,7 @@ import { useState } from "react";
 import { useSettings } from "../hooks/useSettings";
 
 export default function Settings() {
-  const { s, setAI, setTranslate, setBackup, setDefaultPopup, backupNow, restore, msg, setMsg } =
-    useSettings();
+  const { s, setAI, setBackup, setDefaultPopup, backupNow, restore, msg, setMsg } = useSettings();
   const [backupDir, setBackupDir] = useState("");
   const [restoreFile, setRestoreFile] = useState("");
 
@@ -11,17 +10,20 @@ export default function Settings() {
     <div className="settings-page">
       {!s.loaded && <p className="muted">加载中…</p>}
 
-      {/* AI 接口配置（文书智能体 / 翻译共用） */}
+      {/* AI 接口配置（文书智能体 / 翻译 / 文档翻译 / 多模态转录共用） */}
       <section className="card">
         <h3>AI 接口配置（文书智能体 / 翻译共用）</h3>
-        <p className="muted hint">OpenAI 兼容接口，供「文书智能体」规划/执行与翻译使用。留空则智能体进入演示模式（翻译不可用）。</p>
+        <p className="muted hint">
+          OpenAI 兼容接口，供「文书智能体」规划/执行、「翻译」文本翻译与「文档全文翻译」（含 PDF / 图片转录）统一使用。
+          留空则智能体进入演示模式（翻译不可用）。DeepSeek 示例：base_url 填 https://api.deepseek.com/v1，模型填 deepseek-chat。
+        </p>
         <div className="form-grid">
           <label>
             <span>接口地址 base_url</span>
             <input
               value={s.ai.baseUrl}
               onChange={(e) => setAI({ baseUrl: e.target.value })}
-              placeholder="https://api.openai.com/v1"
+              placeholder="https://api.deepseek.com/v1"
             />
           </label>
           <label>
@@ -29,7 +31,7 @@ export default function Settings() {
             <input
               value={s.ai.model}
               onChange={(e) => setAI({ model: e.target.value })}
-              placeholder="gpt-4o-mini"
+              placeholder="deepseek-chat（视觉/文件输入模型如 gpt-4o、qwen-vl-max）"
             />
           </label>
           <label className="wide">
@@ -44,38 +46,18 @@ export default function Settings() {
         </div>
       </section>
 
-      {/* 翻译配置 */}
+      {/* 翻译说明：不再单独配置通道 */}
       <section className="card">
-        <h3>翻译配置</h3>
-        <div className="form-grid">
-          <label>
-            <span>接口</span>
-            <select
-              value={s.translate.provider}
-              onChange={(e) => setTranslate({ provider: e.target.value })}
-            >
-              <option value="free">内置免费接口（开箱即用）</option>
-              <option value="paid">自定义付费接口</option>
-            </select>
-          </label>
-          <label>
-            <span>模型 / 引擎</span>
-            <input
-              value={s.translate.baseUrl}
-              onChange={(e) => setTranslate({ baseUrl: e.target.value })}
-              placeholder="（可选）付费接口地址"
-            />
-          </label>
-          <label className="wide">
-            <span>API Key</span>
-            <input
-              type="password"
-              value={s.translate.apiKey}
-              onChange={(e) => setTranslate({ apiKey: e.target.value })}
-              placeholder="选用自有接口时填写"
-            />
-          </label>
-        </div>
+        <h3>翻译说明</h3>
+        <p className="muted hint">
+          翻译不再提供内置免费接口（国内网络不可达且译文不可控），已统一改为调用上面的 AI 接口：
+        </p>
+        <ul className="muted hint" style={{ margin: "6px 0 0", paddingLeft: 18, lineHeight: 1.9 }}>
+          <li>文本翻译：长文档自动按段落分块，逐段流式输出。</li>
+          <li>文档全文翻译：docx / pptx / xlsx / txt 等在本地提取文本，原件不上传；pdf 与图片由模型转录（标注「非原文」）后再翻译。</li>
+          <li>译文可导出为 Word（.docx）或 Markdown，并记入首页「最近处理的文书」。</li>
+          <li>如需解析 PDF / 图片，请把模型名换成支持文件或视觉输入的模型（如 gpt-4o、qwen-vl-max）。</li>
+        </ul>
       </section>
 
       {/* 数据备份 */}

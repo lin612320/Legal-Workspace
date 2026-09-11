@@ -15,6 +15,42 @@ export interface FileBase64 {
   base64: string;
 }
 
+export interface ModelAnalyzeResult {
+  ok: boolean;
+  text: string;
+  err?: string;
+}
+
+/** 图片类扩展名（走 image_url 视觉输入） */
+export const IMAGE_EXTS = ["png", "jpg", "jpeg", "webp", "gif", "bmp"];
+
+/** 由文件名推断 MIME（与 Rust read_file_base64 保持一致） */
+export function mimeOfName(fileName: string): string {
+  const i = fileName.lastIndexOf(".");
+  const ext = i < 0 ? "" : fileName.slice(i + 1).toLowerCase();
+  switch (ext) {
+    case "pdf":
+      return "application/pdf";
+    case "png":
+      return "image/png";
+    case "jpg":
+    case "jpeg":
+      return "image/jpeg";
+    case "webp":
+      return "image/webp";
+    case "gif":
+      return "image/gif";
+    case "bmp":
+      return "image/bmp";
+    case "txt":
+    case "md":
+    case "csv":
+      return "text/plain";
+    default:
+      return "application/octet-stream";
+  }
+}
+
 const DEFAULT_PROMPT =
   "你是法律文书转录助手。请完整提取这份法律材料的可引用内容：正文与条款、章节与编号、" +
   "日期与期限、当事人与金额、签名与落款。只输出材料本身可靠呈现的内容与要点，" +
@@ -26,24 +62,25 @@ export async function readFileBase64(path: string): Promise<FileBase64 | null> {
   return callRust<FileBase64>("read_file_base64", { path });
 }
 
-/** 把 PDF / 图片交给模型解析，返回转录文本 */
-export async function analyzeMaterialWithModel(
+/**
+ * 把（已在内存中的）PDF / 图片交给模型解析。
+ * 供「翻译 → 导入文档」这类拿不到绝对路径的场景使用（<input type="file"> 只有字节）。
+ */
+export async function analyzeFileWithModel(
   cfg: AIConfig,
-  path: string,
   fileName: string,
-): Promise<{ ok: boolean; text: string; err?: string }> {
-  const fb = await readFileBase64(path);
-  if (!fb) {
-    return { ok: false, text: "", err: "读取文件失败（仅桌面版支持）。" };
-  }
-  const dataUrl = `data:${fb.mime};base64,${fb.base64}`;
-  const parts: ApiContentPart[] = [{ type: "text", text: DEFAULT_PROMPT }];
-  if (fb.mime.startsWith("image/")) {
+  base64: string,
+  mime: string,
+  prompt: string = DEFAULT_PROMPT,
+): Promise<ModelAnalyzeResult> {
+  const dataUrl = `data:${mime};base64,${base64}`;
+  const parts: ApiContentPart[] = [{ type: "text", text: prompt }];
+  if (mime.startsWith("image/")) {
     parts.push({ type: "image_url", image_url: { url: dataUrl } });
-  } else if (fb.mime === "application/pdf") {
+  } else if (mime === "application/pdf") {
     parts.push({ type: "file", file: { filename: fileName, file_data: dataUrl } });
   } else {
-    return { ok: false, text: "", err: `暂不支持把 ${fb.mime} 直接交给模型，请先转为文本。` };
+    return { ok: false, text: "", err: `暂不支持把 ${mime} 直接交给模型，请先转为文本。` };
   }
 
   try {
@@ -59,7 +96,7 @@ export async function analyzeMaterialWithModel(
         stream: false,
         temperature: 0.1,
       }),
-      signal: AbortSignal.timeout(150_000),
+      signal: AbortSignal.timeout(180_000),
     });
     if (!res.ok) {
       const body = (await res.text().catch(() => "")).slice(0, 200);
@@ -84,4 +121,18 @@ export async function analyzeMaterialWithModel(
       err: `模型解析失败：${e instanceof Error ? e.message : String(e)}`,
     };
   }
+}
+
+/** 按本地路径解析（先读文件再交给模型）；材料导入等已有路径的场景使用 */
+export async function analyzeMaterialWithModel(
+  cfg: AIConfig,
+  path: string,
+  fileName: string,
+  prompt: string = DEFAULT_PROMPT,
+): Promise<ModelAnalyzeResult> {
+  const fb = await readFileBase64(path);
+  if (!fb) {
+    return { ok: false, text: "", err: "读取文件失败（仅桌面版支持）。" };
+  }
+  return analyzeFileWithModel(cfg, fileName, fb.base64, fb.mime, prompt);
 }

@@ -1,7 +1,8 @@
 // API Key 混淆存储（前端侧，与 Rust 侧 src-tauri/src/keycrypt.rs 对称）
 // 算法：XOR(PAD 循环) → hex；带 `enc:` 前缀表示已加密；无前缀视为历史明文。
-// 用途：settings 里 ai.api_key / translate.api_key 落盘（localStorage / 发送给
-// Rust 落 SQLite）前加密，读取后解密为明文供 AI/翻译使用。
+// 用途：settings 里 ai.api_key 落盘（localStorage / 发送给
+// Rust 落 SQLite）前加密，读取后解密为明文供 AI（智能体 / 翻译共用）使用。
+// 注：Rust 侧 keycrypt.rs 仍保留 translate.api_key 的兼容读写，供旧数据读取，前端已不再写入。
 
 const PAD = "floating-ball::legal-workbench::2026";
 
