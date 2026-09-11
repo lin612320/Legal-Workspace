@@ -50,7 +50,7 @@
       "icons/icon.ico"
     ],
     "resources": {
-      "../floating-ball/dist-060/win-unpacked": "win-unpacked-0.7.0",
+      "../floating-ball/dist-060/win-unpacked": "win-unpacked-0.7.1",
       "preload/legal_preload.db": "legal_preload.db"
     }
   }

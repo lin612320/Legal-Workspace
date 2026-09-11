@@ -6,6 +6,7 @@
 
 ### 修复
 
+- **0.7.1 覆盖安装报 `Error opening file for writing: …\win-unpacked-0.7.0\chrome_100_percent.pak`**：打包时误沿用了上一版的悬浮球资源目录名（`win-unpacked-0.7.0`），而常驻托盘的 0.7.0 悬浮球进程正锁着该目录里的 `.pak` / `.dll` / `icudtl.dat`，NSIS 覆盖写入失败（同一坑 0.3.1、0.3.2 已踩过两次）。修复：`tauri.conf.json` 的悬浮球资源目录随版本递增为 **`win-unpacked-0.7.1`**；主程序 `ball.rs::sorted_subdirs` 本就**优先拉起版本号最大**的目录，因此升级安装写入全新目录、与运行中的旧悬浮球互不干扰，旧球退出后自行失效。docs/04 补记「每次发版必须递增该目录名」的硬规则。
 - **取消勾选待办报 `NOT NULL constraint failed: todos.done`**：`todos` 表里 `done` / `desktop_popup` 是 `INTEGER NOT NULL`，而 `todos_create` / `todos_save` / `todos_update` 用 `bool::then_some(1)` 写值——`false` 会写成 **NULL**，于是「勾选完成」正常、「**取消勾选**」直接撞 NOT NULL 约束（新建时关掉「桌面弹窗」也会同样失败）。修复：待办的全部 SQL 收敛到 `db.rs`（`todos_list` / `todo_create` / `todo_save` / `todo_update` / `todo_delete` / `todo_mark_notified`），布尔统一经 `flag()` 显式写 0/1；`todo_save` 影响 0 行时返回「待办不存在（id=…），可能已被删除」而不是静默成功。
 - **底层报错不再裸奔**：新增 `db::friendly_db_err`，把 SQLite 原始信息翻译成可读中文（`NOT NULL constraint failed: todos.done` → 「完成状态不能为空（数据列约束）…」、`database is locked` → 「数据库正被占用…」、`no such table` → 「数据表缺失，可到数据设置从备份还原」等），随前端已有的失败提示一起展示。
 - 新增回归测试 `db::tests::todos_create_save_and_uncheck_roundtrip`（新建 → 勾选 → **取消勾选** → 改回弹窗 → 局部更新 → 删除全链路，含 false 必须落 0 的断言）与 `friendly_db_err_maps_raw_sqlite_messages`；`cargo test` **17/17** 通过。
