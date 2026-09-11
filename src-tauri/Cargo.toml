@@ -1,6 +1,6 @@
 [package]
 name = "legal-workbench"
-version = "0.7.0"
+version = "0.7.1"
 description = "法元（Faron，工程名 legal-workbench）—— 法律工作者本地桌面助手"
 authors = ["you"]
 edition = "2021"

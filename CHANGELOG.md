@@ -2,6 +2,31 @@
 
 本项目的所有重要变更都会记录在此文件，格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，版本号遵循[语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [赛事版 0.7.1] - 2026-09-11（分支 `feature/赛事版`，相对 0.7.0）
+
+### 修复
+
+- **取消勾选待办报 `NOT NULL constraint failed: todos.done`**：`todos` 表里 `done` / `desktop_popup` 是 `INTEGER NOT NULL`，而 `todos_create` / `todos_save` / `todos_update` 用 `bool::then_some(1)` 写值——`false` 会写成 **NULL**，于是「勾选完成」正常、「**取消勾选**」直接撞 NOT NULL 约束（新建时关掉「桌面弹窗」也会同样失败）。修复：待办的全部 SQL 收敛到 `db.rs`（`todos_list` / `todo_create` / `todo_save` / `todo_update` / `todo_delete` / `todo_mark_notified`），布尔统一经 `flag()` 显式写 0/1；`todo_save` 影响 0 行时返回「待办不存在（id=…），可能已被删除」而不是静默成功。
+- **底层报错不再裸奔**：新增 `db::friendly_db_err`，把 SQLite 原始信息翻译成可读中文（`NOT NULL constraint failed: todos.done` → 「完成状态不能为空（数据列约束）…」、`database is locked` → 「数据库正被占用…」、`no such table` → 「数据表缺失，可到数据设置从备份还原」等），随前端已有的失败提示一起展示。
+- 新增回归测试 `db::tests::todos_create_save_and_uncheck_roundtrip`（新建 → 勾选 → **取消勾选** → 改回弹窗 → 局部更新 → 删除全链路，含 false 必须落 0 的断言）与 `friendly_db_err_maps_raw_sqlite_messages`；`cargo test` **17/17** 通过。
+- **待办的「设置不生效 / 刷新就没了」根因**：Tauri v2 默认把 Rust 侧 snake_case 参数名映射成 **camelCase** 再从 JS 读取，旧代码传的是 `due_at` / `remind_minutes` / `desktop_popup`，被当成「缺参」处理：
+  - `todos_save` 缺少必填 `remindMinutes` / `desktopPopup` → 整条命令报错，而 `callRust` 把错误吞掉返回 `null`，于是**勾选「完成」根本没写进数据库**、刷新后复选框复原、首页「进行中」恒为原值（只有「删除」能生效）；
+  - `todos_create` 的截止时间 / 提前提醒 / 桌面弹窗被静默丢弃（`Option` 字段变 `None`），所以**刷新后待办里设置好的时间与提醒信息消失**。
+  - 修复：`useTodos` 全量改为 camelCase 传参（`dueAt` / `remindMinutes` / `desktopPopup`），并新增 `invokeStrict`（失败抛错，不再静默）；`Todo` 页与首页对失败给出可见提示，首页在窗口重新聚焦时对齐后端数据。
+- **新增待办后列表不刷新**：`todos_create` 成功后前端只写了后端、没更新本地 state，必须手动切页/重启才看得到。修复：新增/勾选/删除一律先写库、再立即更新本地列表，列表与首页统计即时刷新。
+- **同类参数名 bug（一并修复）**：`templates_create` 的 `file_type` → `fileType`（此前「新建模板」静默失败）；`document_save` / `task_artifact_add` 的 `file_path` → `filePath`（此前交付物落「最近文书」时文件路径丢失，首页「打开」按钮不出现）。
+
+### 变更
+
+- **翻译不再提供内置免费接口**：移除 Google gtx 免费通道（国内网络不可达、译文不可控），文本翻译、文档全文翻译、智能体 `translate_text` 工具全部统一走「数据设置 → AI 接口」（DeepSeek / OpenAI 兼容）；「数据设置」删除独立的「翻译配置」（接口 / 地址 / Key 三项），改为说明卡，翻译与文书智能体共用同一份 `ai.*` 配置。
+- **文档全文翻译（多模态）**：翻译页新增「文本翻译 / 文档全文翻译」两种模式与「选择文档」入口：
+  - docx / pptx / xlsx / txt / md / csv 由 Rust **本地提取文本**（原件不上传）；切换 UTF-8 与 GB18030 解码，兼容老 Windows 中文文本；
+  - pdf / 图片走支持文件或视觉输入的模型**转录全文**后再翻译，转录文本明确标注「模型转录，非原文」，与材料导入同一口径；
+  - 长文档按段落分块（默认 2400 字/块）顺序翻译、逐块流式回显、显示「已译 n/N 段」并支持「停止」，术语与人名跨块保持一致；
+  - 译文支持**导出 Word（.docx）**（桌面，同时记入首页「最近处理的文书」，可打开 / 定位）或**下载 .md**（浏览器预览）。
+- 新增 Rust 命令 `extract_material_b64`（`<input type="file">` 拿不到绝对路径，故按「文件名 + base64」把字节临时落盘 → 复用 `office::extract_office_text` → 立即删除临时文件）。
+- 版本升至 **0.7.1**（`package.json` / `tauri.conf.json` / `Cargo.toml`）；工程名 / exe / 进程 / 数据目录不变，升级不丢数据。
+
 ## [赛事版 0.7.0] - 2026-09-09（分支 `feature/赛事版`，相对赛事版 0.6.0）
 
 ### 新增
