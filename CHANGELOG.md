@@ -26,6 +26,8 @@
   - 长文档按段落分块（默认 2400 字/块）顺序翻译、逐块流式回显、显示「已译 n/N 段」并支持「停止」，术语与人名跨块保持一致；
   - 译文支持**导出 Word（.docx）**（桌面，同时记入首页「最近处理的文书」，可打开 / 定位）或**下载 .md**（浏览器预览）。
 - 新增 Rust 命令 `extract_material_b64`（`<input type="file">` 拿不到绝对路径，故按「文件名 + base64」把字节临时落盘 → 复用 `office::extract_office_text` → 立即删除临时文件）。
+- **发行渠道（首次建立）**：安装包发布到 **GitHub Releases**——<https://github.com/lin612320/Legal-Workspace/releases>（资产 `Faron-0.7.1-x64-setup.exe`，135.1 MB；git 单文件上限 100 MiB，故走 Release 资产而非仓库文件）；**产品演示站**上线 Cloudflare Pages：<https://faron-demo.pages.dev>（源文件 `官网演示/index.html`，单文件零依赖、可离线双击打开；含「引用自检交互实验室」与可交互知识图谱）。公开发布前已只读核验预置库无个人数据（`settings` / `documents` / `todos` / `chat_messages` 为空）。
+- 文档同步：`docs/项目计划书.md` 升级 **v3.1**（对齐 0.7.1 发布实况、补记 0.7.0/0.7.1 里程碑、新增发布渠道与两条风险对策），并新增可复用的 Markdown → Word 转换脚本 `scripts/md2docx.py` 用于重新生成 `docs/项目计划书.docx`（此前 `.md`/`.docx` 成对却无同步工具）。
 - 版本升至 **0.7.1**（`package.json` / `tauri.conf.json` / `Cargo.toml`）；工程名 / exe / 进程 / 数据目录不变，升级不丢数据。
 
 ## [赛事版 0.7.0] - 2026-09-09（分支 `feature/赛事版`，相对赛事版 0.6.0）
