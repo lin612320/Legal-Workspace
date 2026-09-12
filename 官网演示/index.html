@@ -1,0 +1,3672 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>法元 · Faron — 本地优先的 AI 法律工作台</title>
+<meta name="description" content="法元 · Faron：法律工作者的本地桌面助手。内置 152,940 条日美法条文级库、5 类文书智能体任务、确定性引用自检与知识图谱规划，数据不出本机。" />
+<meta property="og:type" content="website" />
+<meta property="og:title" content="法元 · Faron — 本地优先的 AI 法律工作台" />
+<meta property="og:description" content="真实法库 + 文书智能体 + 确定性引用自检。数据全部留在本机。" />
+<!-- 分享缩略图（og:image 必须是绝对地址）。绑定自有域名后把下面两个 URL 换成新域名 -->
+<meta property="og:url" content="https://faron-demo.pages.dev/" />
+<meta property="og:image" content="https://faron-demo.pages.dev/og-image.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta name="twitter:card" content="summary_large_image" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230A0F1E'/%3E%3Ctext x='32' y='44' font-size='34' text-anchor='middle' fill='%23D8B26A' font-family='serif'%3E%E6%B3%95%3C/text%3E%3C/svg%3E" />
+<style>
+/* ============================================================
+   法元 · Faron — 产品演示页
+   设计令牌 / 主题 / 布局 / 组件
+   ============================================================ */
+:root {
+  --gold: #d8b26a;
+  --gold-2: #efd9a3;
+  --blue: #6ea8fe;
+  --green: #4ade80;
+  --red: #f87171;
+  --radius: 16px;
+  --radius-sm: 10px;
+  --maxw: 1180px;
+  --ease: cubic-bezier(.22,.61,.36,1);
+  --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI",
+          "PingFang SC", "Microsoft YaHei", "Noto Sans SC", "Hiragino Sans GB", sans-serif;
+  --font-serif: "Songti SC", "Noto Serif SC", "SimSun", Georgia, serif;
+  --mono: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+html[data-theme="dark"] {
+  --bg: #070a14;
+  --bg-2: #0a0f1e;
+  --surface: rgba(255,255,255,.032);
+  --surface-2: rgba(255,255,255,.055);
+  --surface-solid: #0d1322;
+  --border: rgba(255,255,255,.085);
+  --border-strong: rgba(255,255,255,.16);
+  --text: #e9eef8;
+  --text-2: #aab6cc;
+  --text-3: #74829c;
+  --accent: var(--gold);
+  --accent-ink: #1a1408;
+  --shadow: 0 24px 60px -22px rgba(0,0,0,.85);
+  --glow: 0 0 0 1px rgba(216,178,106,.28), 0 18px 50px -18px rgba(216,178,106,.28);
+  --grid: rgba(255,255,255,.045);
+  --hero-a: rgba(80,120,255,.30);
+  --hero-b: rgba(216,178,106,.22);
+  --hero-c: rgba(140,90,255,.18);
+  --ok-bg: rgba(74,222,128,.12);
+  --bad-bg: rgba(248,113,113,.12);
+  --chip: rgba(255,255,255,.05);
+}
+
+html[data-theme="light"] {
+  --bg: #f5f6fa;
+  --bg-2: #eceff6;
+  --surface: rgba(255,255,255,.86);
+  --surface-2: #ffffff;
+  --surface-solid: #ffffff;
+  --border: rgba(16,24,40,.10);
+  --border-strong: rgba(16,24,40,.20);
+  --text: #0f1729;
+  --text-2: #4a5568;
+  --text-3: #7b8798;
+  --accent: #9a7628;
+  --accent-ink: #fffdf7;
+  --shadow: 0 20px 50px -26px rgba(16,24,40,.35);
+  --glow: 0 0 0 1px rgba(154,118,40,.30), 0 18px 44px -20px rgba(154,118,40,.28);
+  --grid: rgba(16,24,40,.055);
+  --hero-a: rgba(80,120,255,.20);
+  --hero-b: rgba(216,178,106,.26);
+  --hero-c: rgba(140,90,255,.13);
+  --ok-bg: rgba(22,163,74,.10);
+  --bad-bg: rgba(220,38,38,.09);
+  --chip: rgba(16,24,40,.045);
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 15.5px;
+  line-height: 1.72;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+
+h1, h2, h3, h4 { margin: 0; line-height: 1.24; letter-spacing: -.015em; font-weight: 650; }
+p { margin: 0; }
+a { color: inherit; text-decoration: none; }
+ul { margin: 0; padding: 0; list-style: none; }
+button { font: inherit; color: inherit; }
+
+::selection { background: rgba(216,178,106,.30); }
+
+/* ---------- 背景装饰 ---------- */
+.bg-aurora {
+  position: fixed; inset: -20% -10% auto -10%; height: 90vh; z-index: 0;
+  pointer-events: none; filter: blur(70px); opacity: .9;
+  background:
+    radial-gradient(42% 55% at 22% 30%, var(--hero-a), transparent 70%),
+    radial-gradient(38% 48% at 74% 18%, var(--hero-b), transparent 70%),
+    radial-gradient(40% 60% at 55% 62%, var(--hero-c), transparent 72%);
+  animation: drift 26s var(--ease) infinite alternate;
+}
+.bg-grid {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .5;
+  background-image:
+    linear-gradient(to right, var(--grid) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid) 1px, transparent 1px);
+  background-size: 62px 62px;
+  mask-image: radial-gradient(115% 70% at 50% 0%, #000 25%, transparent 78%);
+  -webkit-mask-image: radial-gradient(115% 70% at 50% 0%, #000 25%, transparent 78%);
+}
+@keyframes drift {
+  from { transform: translate3d(-2%, -1%, 0) scale(1); }
+  to   { transform: translate3d(3%, 2%, 0) scale(1.12); }
+}
+
+/* ---------- 顶部进度 + 导航 ---------- */
+.progress {
+  position: fixed; top: 0; left: 0; height: 2px; width: 0; z-index: 60;
+  background: linear-gradient(90deg, var(--gold), var(--gold-2));
+  box-shadow: 0 0 12px rgba(216,178,106,.55);
+  transition: width .1s linear;
+}
+.nav {
+  position: sticky; top: 0; z-index: 50;
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  background: color-mix(in srgb, var(--bg) 78%, transparent);
+  border-bottom: 1px solid transparent;
+  transition: border-color .3s var(--ease), background .3s var(--ease);
+}
+.nav.scrolled { border-bottom-color: var(--border); }
+.nav-inner {
+  max-width: var(--maxw); margin: 0 auto; padding: 12px 22px;
+  display: flex; align-items: center; gap: 20px;
+}
+.brand { display: flex; align-items: center; gap: 11px; font-weight: 700; letter-spacing: -.01em; }
+.brand-mark {
+  width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center;
+  font-family: var(--font-serif); font-size: 19px; color: var(--gold);
+  background: linear-gradient(150deg, rgba(216,178,106,.20), rgba(216,178,106,.05));
+  border: 1px solid rgba(216,178,106,.32);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.10);
+}
+.brand-name { font-size: 15.5px; }
+.brand-name em { font-style: normal; color: var(--text-3); font-weight: 500; font-size: 13px; }
+.nav-links { display: flex; gap: 4px; margin-left: auto; }
+.nav-links a {
+  padding: 7px 12px; border-radius: 999px; font-size: 13.5px; color: var(--text-2);
+  transition: color .2s, background .2s;
+}
+.nav-links a:hover { color: var(--text); background: var(--chip); }
+.nav-links a.active { color: var(--text); background: var(--surface-2); border: 1px solid var(--border); }
+.nav-actions { display: flex; align-items: center; gap: 8px; }
+
+.icon-btn {
+  width: 36px; height: 36px; display: grid; place-items: center; cursor: pointer;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--surface);
+  transition: transform .2s var(--ease), border-color .2s, background .2s;
+}
+.icon-btn:hover { transform: translateY(-1px); border-color: var(--border-strong); background: var(--surface-2); }
+.icon-btn svg { width: 17px; height: 17px; }
+html[data-theme="dark"] .i-sun { display: block; }
+html[data-theme="dark"] .i-moon { display: none; }
+html[data-theme="light"] .i-sun { display: none; }
+html[data-theme="light"] .i-moon { display: block; }
+.nav-burger { display: none; }
+
+.mobile-menu {
+  display: none; border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg) 96%, transparent);
+}
+.mobile-menu.open { display: block; }
+.mobile-menu a { display: block; padding: 12px 22px; border-bottom: 1px solid var(--border); color: var(--text-2); }
+
+/* ---------- 按钮 ---------- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+  padding: 11px 20px; border-radius: 11px; border: 1px solid var(--border);
+  background: var(--surface); cursor: pointer; font-size: 14px; font-weight: 560;
+  transition: transform .18s var(--ease), box-shadow .25s var(--ease), border-color .2s, background .2s;
+  white-space: nowrap;
+}
+.btn:hover { transform: translateY(-1.5px); border-color: var(--border-strong); }
+.btn:active { transform: translateY(0); }
+.btn-primary {
+  background: linear-gradient(145deg, var(--gold-2), var(--gold));
+  color: var(--accent-ink); border-color: transparent; font-weight: 650;
+  box-shadow: 0 10px 30px -12px rgba(216,178,106,.55);
+}
+.btn-primary:hover { box-shadow: 0 16px 38px -12px rgba(216,178,106,.7); }
+.btn-ghost { background: transparent; }
+.btn-sm { padding: 8px 14px; font-size: 13px; border-radius: 9px; }
+.btn svg { width: 16px; height: 16px; }
+.btn.wide { width: 100%; }
+
+:where(a, button, input, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 8px;
+}
+
+/* ---------- 版式 ---------- */
+main { position: relative; z-index: 1; }
+.wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 22px; }
+section { padding: 84px 0; position: relative; scroll-margin-top: 72px; }
+.eyebrow {
+  display: inline-flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 620;
+  letter-spacing: .16em; text-transform: uppercase; color: var(--accent); margin-bottom: 14px;
+}
+.eyebrow::before { content: ""; width: 22px; height: 1px; background: currentColor; opacity: .65; }
+h2.title { font-size: clamp(25px, 3.4vw, 37px); }
+.lede { color: var(--text-2); margin-top: 14px; max-width: 62ch; font-size: 15.8px; }
+.sec-head { margin-bottom: 42px; }
+.gold { color: var(--accent); }
+.mono { font-family: var(--mono); font-size: .92em; }
+.muted { color: var(--text-3); }
+
+.card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 22px; position: relative; overflow: hidden;
+  transition: transform .3s var(--ease), border-color .3s, box-shadow .35s var(--ease);
+}
+.card::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: radial-gradient(420px circle at var(--mx, 50%) var(--my, 0%), rgba(216,178,106,.10), transparent 62%);
+  opacity: 0; transition: opacity .3s;
+}
+.card:hover { transform: translateY(-3px); border-color: var(--border-strong); box-shadow: var(--shadow); }
+.card:hover::after { opacity: 1; }
+
+/* ---------- 滚动显现 ---------- */
+.reveal { opacity: 0; transform: translateY(18px); transition: opacity .7s var(--ease), transform .7s var(--ease); }
+.reveal.in { opacity: 1; transform: none; }
+
+/* ---------- Hero ---------- */
+#hero { padding: 92px 0 66px; }
+.hero-grid { display: grid; grid-template-columns: 1.06fr .94fr; gap: 54px; align-items: center; }
+.badge-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 22px; }
+.badge {
+  display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--surface); font-size: 12.5px; color: var(--text-2);
+}
+.dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); }
+.badge.g .dot { background: var(--gold); box-shadow: 0 0 8px var(--gold); }
+h1 {
+  font-size: clamp(33px, 5vw, 56px); font-weight: 700; letter-spacing: -.03em;
+}
+h1 .grad {
+  background: linear-gradient(100deg, var(--gold-2) 8%, var(--gold) 42%, #c9d7f5 92%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.hero-sub { color: var(--text-2); font-size: 16.5px; margin-top: 20px; max-width: 54ch; }
+.hero-cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 30px; align-items: center; }
+.hero-note { font-size: 12.5px; color: var(--text-3); margin-top: 16px; }
+.hero-facts { display: flex; gap: 26px; margin-top: 34px; flex-wrap: wrap; }
+.hero-fact .k { font-size: 21px; font-weight: 700; letter-spacing: -.02em; }
+.hero-fact .v { font-size: 12.5px; color: var(--text-3); }
+
+/* 应用窗口模拟 */
+.app-window {
+  border: 1px solid var(--border); border-radius: 14px; overflow: hidden;
+  background: var(--surface-solid); box-shadow: var(--shadow);
+  transform: perspective(1600px) rotateY(-7deg) rotateX(2deg);
+  transition: transform .6s var(--ease);
+}
+.app-window:hover { transform: perspective(1600px) rotateY(-2deg) rotateX(1deg) translateY(-4px); }
+.win-bar {
+  display: flex; align-items: center; gap: 8px; padding: 10px 13px;
+  border-bottom: 1px solid var(--border); background: var(--chip);
+}
+.traffic { display: flex; gap: 6px; }
+.traffic i { width: 10px; height: 10px; border-radius: 50%; display: block; }
+.traffic i:nth-child(1) { background: #ff5f57; } .traffic i:nth-child(2) { background: #febc2e; } .traffic i:nth-child(3) { background: #28c840; }
+.win-title { font-size: 12px; color: var(--text-3); margin-left: 6px; }
+.win-body { display: grid; grid-template-columns: 132px 1fr; min-height: 296px; }
+.win-side { border-right: 1px solid var(--border); padding: 12px 10px; background: var(--chip); }
+.win-side .si { display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-radius: 8px; font-size: 12.5px; color: var(--text-3); }
+.win-side .si.on { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
+.win-side .si b { width: 5px; height: 5px; border-radius: 50%; background: currentColor; opacity: .55; }
+.win-main { padding: 16px 18px; }
+.win-h { font-size: 13.5px; font-weight: 620; margin-bottom: 10px; }
+.tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
+.tile { border: 1px solid var(--border); border-radius: 10px; padding: 10px 11px; background: var(--surface); }
+.tile .n { font-size: 19px; font-weight: 700; letter-spacing: -.02em; }
+.tile .l { font-size: 11px; color: var(--text-3); }
+.mini-row {
+  display: flex; align-items: center; gap: 9px; padding: 8px 10px; font-size: 12.5px;
+  border: 1px solid var(--border); border-radius: 9px; margin-bottom: 7px; background: var(--surface);
+}
+.check { width: 15px; height: 15px; border-radius: 4px; border: 1px solid var(--border-strong); display: grid; place-items: center; flex: none; }
+.check.on { background: var(--gold); border-color: var(--gold); color: var(--accent-ink); font-size: 10px; }
+.mini-row.done span { text-decoration: line-through; color: var(--text-3); }
+.pill { margin-left: auto; font-size: 10.5px; padding: 2px 8px; border-radius: 999px; background: var(--chip); color: var(--text-3); border: 1px solid var(--border); }
+.pill.warn { color: #f0b429; border-color: rgba(240,180,41,.35); background: rgba(240,180,41,.10); }
+.pill.err { color: var(--red); border-color: rgba(248,113,113,.35); background: var(--bad-bg); }
+.pill.ok { color: var(--green); border-color: rgba(74,222,128,.35); background: var(--ok-bg); }
+
+/* 悬浮球浮标 */
+.ball-float {
+  position: absolute; right: -14px; bottom: 26px; width: 92px; height: 92px; border-radius: 50%;
+  background: radial-gradient(circle at 32% 28%, #2a3350, #0d1322 70%);
+  border: 1px solid rgba(216,178,106,.45); display: grid; place-items: center;
+  box-shadow: 0 18px 40px -14px rgba(0,0,0,.8), inset 0 1px 0 rgba(255,255,255,.12);
+  font-family: var(--font-serif); font-size: 30px; color: var(--gold); cursor: pointer;
+  animation: bob 5s ease-in-out infinite;
+}
+@keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-9px); } }
+.ball-tip {
+  position: absolute; right: 84px; bottom: 74px; white-space: nowrap; font-size: 12px;
+  padding: 7px 12px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--surface-solid); box-shadow: var(--shadow); color: var(--text-2);
+}
+
+/* ---------- 数据带 ---------- */
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.stat { text-align: left; padding: 22px; }
+.stat .num { font-size: clamp(26px, 3.4vw, 40px); font-weight: 720; letter-spacing: -.035em; font-variant-numeric: tabular-nums; }
+.stat .lab { color: var(--text-2); font-size: 13.5px; margin-top: 4px; }
+.stat .sub { color: var(--text-3); font-size: 12px; margin-top: 8px; }
+.stat-bar { height: 2px; margin-top: 16px; border-radius: 2px; background: linear-gradient(90deg, var(--gold), transparent); opacity: .55; }
+
+/* ---------- 能力卡 ---------- */
+.caps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.cap { padding: 24px; cursor: pointer; }
+.cap .ico {
+  width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center; margin-bottom: 15px;
+  background: linear-gradient(150deg, rgba(216,178,106,.18), rgba(216,178,106,.04));
+  border: 1px solid rgba(216,178,106,.28); color: var(--gold);
+}
+.cap .ico svg { width: 19px; height: 19px; }
+.cap h3 { font-size: 16.5px; margin-bottom: 8px; }
+.cap p { color: var(--text-2); font-size: 14px; }
+.cap .more { margin-top: 14px; font-size: 13px; color: var(--accent); display: inline-flex; align-items: center; gap: 6px; }
+.cap .detail {
+  max-height: 0; overflow: hidden; transition: max-height .45s var(--ease), opacity .3s, margin .3s;
+  opacity: 0; font-size: 13.4px; color: var(--text-2);
+}
+.cap.open .detail { max-height: 320px; opacity: 1; margin-top: 12px; }
+.cap .detail li { padding-left: 15px; position: relative; margin-top: 6px; }
+.cap .detail li::before { content: ""; position: absolute; left: 2px; top: .62em; width: 4px; height: 4px; border-radius: 50%; background: var(--accent); opacity: .8; }
+.cap.open .more .chev { transform: rotate(180deg); }
+.cap .more .chev { transition: transform .3s var(--ease); }
+
+/* ---------- Tabs ---------- */
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 20px; }
+.tab {
+  padding: 9px 16px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface);
+  cursor: pointer; font-size: 13.5px; color: var(--text-2); transition: all .2s var(--ease);
+}
+.tab:hover { color: var(--text); border-color: var(--border-strong); }
+.tab[aria-selected="true"] {
+  background: var(--surface-2); color: var(--text); border-color: var(--border-strong);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
+}
+.tab[aria-selected="true"]::before { content: "●"; color: var(--accent); font-size: 8px; margin-right: 7px; vertical-align: 1px; }
+.panel { display: none; }
+.panel.on { display: block; animation: fade .45s var(--ease); }
+@keyframes fade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.showcase { display: grid; grid-template-columns: 1.02fr .98fr; gap: 22px; align-items: stretch; }
+.showcase .card { padding: 0; overflow: hidden; }
+.showcase .card:hover { transform: none; }
+.pane-h { display: flex; align-items: center; gap: 10px; padding: 13px 17px; border-bottom: 1px solid var(--border); background: var(--chip); font-size: 13px; }
+.pane-h .pill { margin-left: auto; }
+.pane-b { padding: 16px 17px; }
+.kv { display: grid; grid-template-columns: 88px 1fr; gap: 6px 12px; font-size: 13.2px; }
+.kv dt { color: var(--text-3); }
+.kv dd { margin: 0; color: var(--text-2); }
+.steps-mini { display: flex; flex-direction: column; gap: 7px; margin-top: 12px; }
+.step-mini { display: flex; align-items: center; gap: 10px; font-size: 13px; padding: 9px 11px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); }
+.step-mini .idx { width: 20px; height: 20px; border-radius: 6px; display: grid; place-items: center; font-size: 11px; background: var(--chip); color: var(--text-3); flex: none; }
+.step-mini.done { border-color: rgba(74,222,128,.28); }
+.step-mini.done .idx { background: var(--ok-bg); color: var(--green); }
+.step-mini.run { border-color: rgba(216,178,106,.35); }
+.step-mini.run .idx { background: rgba(216,178,106,.16); color: var(--gold); }
+.log { font-family: var(--mono); font-size: 12px; color: var(--text-2); background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px; line-height: 1.85; }
+.log b { color: var(--gold); font-weight: 500; }
+.log i { color: var(--text-3); font-style: normal; }
+.log .ok { color: var(--green); }
+.log .bad { color: var(--red); }
+.log .warn { color: #f0b429; }
+.langbar { display: flex; align-items: center; gap: 9px; margin-bottom: 12px; }
+.langbar select {
+  flex: 1; padding: 8px 11px; border-radius: 9px; border: 1px solid var(--border);
+  background: var(--surface-2); color: var(--text); font: inherit; font-size: 13px;
+}
+.dual { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.area {
+  border: 1px solid var(--border); border-radius: 10px; background: var(--surface);
+  padding: 12px; font-size: 13px; min-height: 128px; color: var(--text-2); line-height: 1.8;
+}
+.area.out { background: var(--surface-2); }
+.floating-ball-demo {
+  position: relative; display: grid; place-items: center; padding: 26px 0 10px;
+}
+.fb {
+  width: 76px; height: 76px; border-radius: 50%; display: grid; place-items: center;
+  font-family: var(--font-serif); font-size: 25px; color: var(--gold);
+  background: radial-gradient(circle at 32% 28%, #2a3350, #0d1322 70%);
+  border: 1px solid rgba(216,178,106,.45);
+  box-shadow: 0 16px 34px -14px rgba(0,0,0,.8), inset 0 1px 0 rgba(255,255,255,.12);
+  cursor: pointer; transition: transform .3s var(--ease), box-shadow .3s;
+}
+.fb:hover { transform: scale(1.06); box-shadow: 0 20px 44px -14px rgba(216,178,106,.5), inset 0 1px 0 rgba(255,255,255,.16); }
+.fb-menu {
+  margin-top: 16px; display: flex; gap: 8px; opacity: 0; transform: translateY(8px); pointer-events: none;
+  transition: all .35s var(--ease);
+}
+.fb-menu.on { opacity: 1; transform: none; pointer-events: auto; }
+.fb-menu button {
+  padding: 8px 14px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface);
+  cursor: pointer; font-size: 13px; transition: all .2s;
+}
+.fb-menu button:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ---------- 引用自检实验室 ---------- */
+.lab { display: grid; grid-template-columns: 1.05fr .95fr; gap: 20px; }
+.memo { font-size: 14.2px; line-height: 2.05; }
+.cite {
+  border-bottom: 1.5px dashed var(--border-strong); padding: 1px 2px; border-radius: 3px;
+  transition: background .35s, border-color .35s, color .35s;
+}
+.cite.checking { background: rgba(216,178,106,.16); border-color: var(--gold); }
+.cite.ok { background: var(--ok-bg); border-color: var(--green); color: var(--green); }
+.cite.bad { background: var(--bad-bg); border-color: var(--red); color: var(--red); }
+.report { font-family: var(--mono); font-size: 12.2px; line-height: 1.95; color: var(--text-2); }
+.report .h { color: var(--gold); }
+.report .ok { color: var(--green); }
+.report .bad { color: var(--red); }
+.controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 16px; }
+.switch { display: inline-flex; align-items: center; gap: 9px; font-size: 13px; color: var(--text-2); cursor: pointer; user-select: none; }
+.switch input { position: absolute; opacity: 0; pointer-events: none; }
+.track { width: 42px; height: 24px; border-radius: 999px; background: var(--chip); border: 1px solid var(--border); position: relative; transition: background .25s, border-color .25s; flex: none; }
+.track::after {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%;
+  background: var(--text-3); transition: transform .25s var(--ease), background .25s;
+}
+.switch input:checked + .track { background: rgba(248,113,113,.20); border-color: var(--red); }
+.switch input:checked + .track::after { transform: translateX(18px); background: var(--red); }
+.switch input:focus-visible + .track { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---------- 对比 ---------- */
+.compare { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.cmp-col { padding: 22px; }
+.cmp-col h3 { font-size: 15.5px; display: flex; align-items: center; gap: 9px; margin-bottom: 14px; }
+.cmp-col.b .ico, .cmp-col.a .ico { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; font-size: 13px; }
+.cmp-col.a .ico { background: var(--chip); color: var(--text-3); border: 1px solid var(--border); }
+.cmp-col.b .ico { background: rgba(216,178,106,.16); color: var(--gold); border: 1px solid rgba(216,178,106,.32); }
+.cmp-col li { display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px dashed var(--border); font-size: 13.8px; color: var(--text-2); }
+.cmp-col li:last-child { border-bottom: 0; }
+.cmp-col li .mk { flex: none; width: 18px; }
+.cmp-col.a li .mk { color: var(--text-3); }
+.cmp-col.b li .mk { color: var(--green); }
+.cmp-col.b { box-shadow: var(--glow); border-color: rgba(216,178,106,.28); }
+
+/* ---------- 知识图谱 ---------- */
+.kg-wrap { display: grid; grid-template-columns: 1.35fr .65fr; gap: 18px; align-items: start; }
+.kg-svg { width: 100%; height: auto; display: block; }
+.kg-svg text { font-family: var(--font); }
+.kg-node { cursor: pointer; transition: opacity .25s; }
+.kg-node circle { transition: r .25s var(--ease), filter .25s; }
+.kg-node:hover circle { filter: drop-shadow(0 0 10px rgba(216,178,106,.6)); }
+.kg-edge { stroke: var(--border-strong); stroke-width: 1.2; transition: opacity .25s, stroke .25s, stroke-width .25s; }
+.kg-edge.hl { stroke: var(--gold); stroke-width: 2; }
+.kg-edge.cand { stroke-dasharray: 5 5; stroke: var(--text-3); }
+.kg-svg.dim .kg-node:not(.hl) { opacity: .26; }
+.kg-svg.dim .kg-edge:not(.hl) { opacity: .12; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-3); }
+.legend i { width: 9px; height: 9px; border-radius: 3px; display: block; }
+.cand-row { display: flex; gap: 8px; align-items: center; padding: 9px 0; border-bottom: 1px dashed var(--border); font-size: 13px; }
+.cand-row:last-child { border-bottom: 0; }
+.cand-row .acts { margin-left: auto; display: flex; gap: 6px; }
+.mini-btn { width: 26px; height: 26px; border-radius: 7px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; display: grid; place-items: center; font-size: 12px; transition: all .2s; }
+.mini-btn.yes:hover { border-color: var(--green); color: var(--green); background: var(--ok-bg); }
+.mini-btn.no:hover { border-color: var(--red); color: var(--red); background: var(--bad-bg); }
+.cand-row.done { opacity: .5; }
+.cand-row.done .acts { visibility: hidden; }
+
+/* ---------- 任务卡 ---------- */
+.tasks { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+.task { padding: 18px; cursor: pointer; }
+.task .k { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--text-3); }
+.task h4 { font-size: 15px; margin: 8px 0 10px; }
+.task .out { max-height: 0; overflow: hidden; opacity: 0; transition: all .4s var(--ease); font-size: 13px; color: var(--text-2); }
+.task.open .out { max-height: 240px; opacity: 1; }
+.task .out li { padding-left: 14px; position: relative; margin-top: 5px; }
+.task .out li::before { content: "→"; position: absolute; left: 0; color: var(--accent); font-size: 11px; }
+
+/* ---------- 工作流 ---------- */
+.flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; position: relative; }
+.flow-item { padding: 20px; cursor: pointer; }
+.flow-item .n { font-family: var(--mono); font-size: 12px; color: var(--text-3); }
+.flow-item h4 { font-size: 15.5px; margin: 9px 0 8px; }
+.flow-item p { font-size: 13.4px; color: var(--text-2); }
+.flow-item.on { border-color: rgba(216,178,106,.45); box-shadow: var(--glow); }
+.flow-item.on .n { color: var(--gold); }
+.flow-line { position: absolute; top: 46px; left: 0; right: 0; height: 1px; background: var(--border); z-index: -1; }
+
+/* ---------- 技术栈 ---------- */
+.stack { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.tech { display: flex; gap: 13px; padding: 18px; align-items: flex-start; }
+.tech .tk { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; flex: none; background: var(--chip); border: 1px solid var(--border); font-size: 15px; }
+.tech h4 { font-size: 14.5px; margin-bottom: 5px; }
+.tech p { font-size: 13.2px; color: var(--text-2); }
+
+/* ---------- 下载 ---------- */
+.cta {
+  border-radius: 22px; padding: 44px; position: relative; overflow: hidden;
+  background:
+    radial-gradient(120% 130% at 8% 0%, rgba(216,178,106,.16), transparent 55%),
+    radial-gradient(100% 120% at 92% 12%, rgba(110,168,254,.14), transparent 58%),
+    var(--surface);
+  border: 1px solid var(--border);
+}
+.cta-grid { display: grid; grid-template-columns: 1.1fr .9fr; gap: 32px; align-items: center; }
+.dl-list { display: grid; gap: 10px; }
+.dl {
+  display: flex; align-items: center; gap: 13px; padding: 14px 16px; border-radius: 12px;
+  border: 1px solid var(--border); background: var(--surface-2); cursor: pointer;
+  transition: transform .2s var(--ease), border-color .2s, box-shadow .3s;
+}
+.dl:hover { transform: translateY(-2px); border-color: var(--border-strong); box-shadow: var(--shadow); }
+.dl .ic { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; background: var(--chip); border: 1px solid var(--border); flex: none; }
+.dl .t { font-size: 14px; font-weight: 560; }
+.dl .s { font-size: 12px; color: var(--text-3); }
+.dl .go { margin-left: auto; color: var(--text-3); }
+.hint-box { margin-top: 14px; font-size: 12.6px; color: var(--text-2); border-left: 2px solid var(--gold); padding: 6px 0 6px 13px; }
+
+/* ---------- FAQ ---------- */
+.faq { display: grid; gap: 10px; }
+.faq-item { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); overflow: hidden; }
+.faq-q {
+  width: 100%; text-align: left; padding: 16px 18px; background: none; border: 0; cursor: pointer;
+  display: flex; align-items: center; gap: 12px; font-size: 14.6px; font-weight: 560;
+}
+.faq-q .pm { margin-left: auto; color: var(--text-3); transition: transform .3s var(--ease); flex: none; }
+.faq-item.open .faq-q .pm { transform: rotate(45deg); color: var(--accent); }
+.faq-a { max-height: 0; overflow: hidden; transition: max-height .4s var(--ease); }
+.faq-a div { padding: 0 18px 17px; color: var(--text-2); font-size: 13.9px; }
+
+/* ---------- 页脚 ---------- */
+footer { border-top: 1px solid var(--border); padding: 40px 0 54px; margin-top: 24px; position: relative; z-index: 1; }
+.foot-grid { display: flex; flex-wrap: wrap; gap: 24px; justify-content: space-between; align-items: flex-start; }
+.foot-brand { max-width: 42ch; }
+.foot-links { display: flex; gap: 22px; flex-wrap: wrap; font-size: 13.4px; color: var(--text-2); }
+.foot-links a:hover { color: var(--accent); }
+.foot-note { margin-top: 26px; padding-top: 20px; border-top: 1px solid var(--border); font-size: 12.2px; color: var(--text-3); line-height: 1.9; }
+
+/* ---------- 回到顶部 ---------- */
+.totop {
+  position: fixed; right: 22px; bottom: 22px; z-index: 40; width: 42px; height: 42px; border-radius: 12px;
+  border: 1px solid var(--border); background: var(--surface-2); cursor: pointer; display: grid; place-items: center;
+  opacity: 0; transform: translateY(10px); pointer-events: none; transition: all .3s var(--ease);
+  box-shadow: var(--shadow);
+}
+.totop.on { opacity: 1; transform: none; pointer-events: auto; }
+.totop:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ============================================================
+   新增演示模块：智能体演练 / 法规检索台 / 悬浮球划词
+   ============================================================ */
+/* ---------- 通用小控件 ---------- */
+.chip {
+  padding: 7px 13px; border-radius: 999px; border: 1px solid var(--border);
+  background: var(--surface); font-size: 13px; color: var(--text-2); cursor: pointer;
+  transition: all .2s var(--ease);
+}
+.chip:hover { color: var(--text); border-color: var(--border-strong); }
+.chip[aria-pressed="true"] {
+  background: var(--surface-2); color: var(--text); border-color: var(--border-strong);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
+}
+.chip[aria-pressed="true"]::before { content: "●"; color: var(--accent); font-size: 8px; margin-right: 7px; vertical-align: 1px; }
+.chip-row { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
+
+.input, .sel {
+  padding: 9px 13px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--surface-2); color: var(--text); font: inherit; font-size: 13.6px;
+  outline: none; transition: border-color .2s, box-shadow .2s;
+}
+.input:focus, .sel:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(216,178,106,.14); }
+.input::placeholder { color: var(--text-3); }
+.sel { padding: 9px 11px; cursor: pointer; }
+.seg { display: inline-flex; padding: 3px; border-radius: 999px; border: 1px solid var(--border); background: var(--chip); gap: 3px; }
+.seg button {
+  padding: 6px 13px; border-radius: 999px; border: 0; background: none; cursor: pointer;
+  font-size: 12.8px; color: var(--text-3); transition: all .2s;
+}
+.seg button.on { background: var(--surface-2); color: var(--text); box-shadow: inset 0 1px 0 rgba(255,255,255,.06); }
+mark { background: rgba(216,178,106,.26); color: inherit; border-radius: 4px; padding: 0 2px; }
+.hint-inline { font-size: 12.4px; color: var(--text-3); }
+.prog { height: 4px; border-radius: 999px; background: var(--chip); overflow: hidden; margin-top: 14px; }
+.prog > i {
+  display: block; height: 100%; width: 0; border-radius: 999px;
+  background: linear-gradient(90deg, var(--gold), var(--gold-2)); transition: width .35s var(--ease);
+}
+.scroll-box { max-height: 272px; overflow: auto; }
+.empty { color: var(--text-3); font-size: 13px; text-align: center; padding: 22px 12px; border: 1px dashed var(--border); border-radius: 10px; }
+
+/* ---------- 智能体演练 ---------- */
+.rb-top { padding: 16px 18px; }
+.rb-top .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.rb-top .row + .row { margin-top: 13px; }
+.rb-top .sp { flex: 1 1 12px; }
+.rb-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 18px; align-items: start; }
+.rb-grid .card { padding: 0; overflow: hidden; }
+.rb-grid .card:hover { transform: none; }
+.gate-box {
+  margin-top: 12px; padding: 11px 12px; border-radius: 10px; border: 1px dashed rgba(240,180,41,.5);
+  background: rgba(240,180,41,.08); font-size: 13px; color: var(--text-2);
+}
+.gate-box .ctl { display: flex; gap: 8px; margin-top: 9px; }
+.docview { font-size: 13.6px; line-height: 1.95; color: var(--text-2); }
+.docview h4 { font-size: 15px; text-align: center; color: var(--text); margin: 6px 0 12px; }
+.docview h5 { font-size: 13.6px; color: var(--text); margin: 14px 0 6px; }
+.docview p { margin: 0 0 9px; }
+.docview table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin: 6px 0 10px; }
+.docview th, .docview td { border: 1px solid var(--border); padding: 6px 8px; text-align: left; }
+.docview th { background: var(--chip); color: var(--text-3); font-weight: 500; }
+.docview .cite { font-size: 12.5px; }
+.files { display: grid; gap: 8px; }
+.file {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px;
+  border: 1px solid var(--border); background: var(--surface); font-size: 13px;
+}
+.file .fi { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; background: var(--chip); border: 1px solid var(--border); flex: none; font-size: 13px; }
+.file .fn { font-weight: 560; }
+.file .fs { font-size: 11.6px; color: var(--text-3); }
+.file .fa { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+
+/* ---------- 法规检索台 ---------- */
+.sw-grid { display: grid; grid-template-columns: 1.04fr .96fr; gap: 18px; align-items: start; }
+.sw-grid .card { padding: 0; overflow: hidden; }
+.sw-grid .card:hover { transform: none; }
+.sw-bar { display: flex; flex-wrap: wrap; gap: 9px; align-items: center; }
+.sw-bar .input { flex: 1 1 190px; min-width: 0; }
+.hits { display: grid; gap: 8px; }
+.hit {
+  display: block; width: 100%; text-align: left; padding: 11px 13px; border-radius: 11px;
+  border: 1px solid var(--border); background: var(--surface); cursor: pointer;
+  transition: all .2s var(--ease);
+}
+.hit:hover { border-color: var(--border-strong); transform: translateY(-1px); }
+.hit.on { border-color: rgba(216,178,106,.45); box-shadow: var(--glow); }
+.hit .h1 { display: flex; align-items: center; gap: 8px; font-size: 13.6px; color: var(--text); margin-bottom: 5px; }
+.hit .h1 .no { font-family: var(--mono); font-size: 12px; color: var(--accent); }
+.hit .sn { font-size: 12.7px; color: var(--text-3); line-height: 1.78; }
+.hit .meta { margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.hit .meta .pill { margin-left: 0; }
+.lawlist { display: grid; gap: 14px; }
+.lawlist .lt { font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--text-3); margin-bottom: 7px; }
+.lawitem {
+  display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; padding: 9px 11px;
+  border-radius: 10px; border: 1px solid var(--border); background: var(--surface); cursor: pointer;
+  font-size: 13.2px; color: var(--text-2); transition: all .2s;
+}
+.lawitem:hover { border-color: var(--border-strong); color: var(--text); }
+.lawitem.on { border-color: rgba(216,178,106,.45); color: var(--text); }
+.lawitem .c { margin-left: auto; font-size: 11.5px; color: var(--text-3); }
+.detail-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 4px; }
+.detail-head .law { font-size: 15px; font-weight: 620; color: var(--text); }
+.detail-body { font-size: 13.8px; line-height: 1.95; }
+.detail-body .jp { font-family: var(--font-serif); }
+.detail-body .lbl { font-size: 11.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--text-3); margin: 13px 0 4px; }
+.detail-body .zh { color: var(--text-2); }
+.noforms { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.noforms .nf { font-family: var(--mono); font-size: 12px; padding: 4px 9px; border-radius: 8px; border: 1px solid var(--border); background: var(--chip); color: var(--text-2); }
+.jumpbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 14px; }
+.jumpbar .input { flex: 0 1 200px; min-width: 0; }
+.print-only { display: none; }
+@media print {
+  body.printing > *:not(.print-only) { display: none !important; }
+  body.printing .print-only { display: block !important; padding: 26px 30px; color: #000; }
+  body.printing .print-only p { line-height: 1.9; }
+}
+
+/* ---------- 悬浮球划词 ---------- */
+.ball-grid { display: grid; grid-template-columns: 1.06fr .94fr; gap: 18px; align-items: start; }
+.ball-grid .card { padding: 0; overflow: hidden; }
+.ball-grid .card:hover { transform: none; }
+.doc-wrap { position: relative; }
+.doc-mock {
+  font-size: 14px; line-height: 2.05; color: var(--text-2); user-select: text;
+  border: 1px solid var(--border); border-radius: 12px; padding: 16px 17px; background: var(--surface);
+}
+.doc-mock p { margin: 0 0 10px; }
+.doc-mock p:last-child { margin-bottom: 0; }
+.doc-mock b { color: var(--text); }
+.sel-ball {
+  position: absolute; left: 0; top: 0; width: 34px; height: 34px; border-radius: 50%; border: 0; cursor: pointer;
+  display: grid; place-items: center; font-family: var(--font-serif); font-size: 15px; color: #1a1408;
+  background: radial-gradient(circle at 32% 28%, var(--gold-2), var(--gold) 70%);
+  box-shadow: 0 12px 26px -8px rgba(216,178,106,.6), inset 0 1px 0 rgba(255,255,255,.4);
+  opacity: 0; transform: translate(-50%, -130%) scale(.6); pointer-events: none; z-index: 6;
+  transition: opacity .22s var(--ease), transform .22s var(--ease), background .3s;
+}
+.sel-ball.on { opacity: 1; transform: translate(-50%, -130%) scale(1); pointer-events: auto; }
+.sel-ball[data-skin="indigo"] { background: radial-gradient(circle at 32% 28%, #9dc0ff, #4d7fe0 70%); color: #08122b; box-shadow: 0 12px 26px -8px rgba(110,168,254,.6), inset 0 1px 0 rgba(255,255,255,.4); }
+.sel-ball[data-skin="ink"] { background: radial-gradient(circle at 32% 28%, #5a6579, #232a38 70%); color: #f2f5fb; box-shadow: 0 12px 26px -8px rgba(0,0,0,.75), inset 0 1px 0 rgba(255,255,255,.14); }
+.sel-ball[data-skin="seal"] { background: radial-gradient(circle at 32% 28%, #f2938c, #c0392b 70%); color: #fff6f4; border-radius: 9px; box-shadow: 0 12px 26px -8px rgba(192,57,43,.65), inset 0 1px 0 rgba(255,255,255,.28); }
+.sel-menu {
+  position: absolute; left: 0; top: 0; z-index: 7; display: flex; flex-direction: column; gap: 6px;
+  padding: 8px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface-solid);
+  box-shadow: var(--shadow); opacity: 0; transform: translate(-50%, 4px); pointer-events: none;
+  transition: opacity .22s var(--ease), transform .22s var(--ease);
+}
+.sel-menu.on { opacity: 1; transform: translate(-50%, 8px); pointer-events: auto; }
+.sel-menu button {
+  padding: 7px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface);
+  cursor: pointer; font-size: 12.8px; white-space: nowrap; transition: all .2s;
+}
+.sel-menu button:hover { border-color: var(--accent); color: var(--accent); }
+.skin-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.skin-dot {
+  width: 26px; height: 26px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.35); transition: transform .2s var(--ease);
+}
+.skin-dot:hover { transform: translateY(-2px); }
+.skin-dot[data-skin="gold"] { background: linear-gradient(150deg, var(--gold-2), var(--gold)); }
+.skin-dot[data-skin="indigo"] { background: linear-gradient(150deg, #9dc0ff, #4d7fe0); }
+.skin-dot[data-skin="ink"] { background: linear-gradient(150deg, #5a6579, #232a38); }
+.skin-dot[data-skin="seal"] { background: linear-gradient(150deg, #f2938c, #c0392b); border-radius: 8px; }
+.skin-dot.on { border-color: var(--text); }
+.floating-ball-demo[data-skin="indigo"] .fb { background: radial-gradient(circle at 32% 28%, #2b3f6b, #0b1226 70%); border-color: rgba(110,168,254,.5); color: #9dc0ff; }
+.floating-ball-demo[data-skin="ink"] .fb { background: radial-gradient(circle at 32% 28%, #3a4354, #131824 70%); border-color: rgba(255,255,255,.22); color: #e6ebf5; }
+.floating-ball-demo[data-skin="seal"] .fb { background: radial-gradient(circle at 32% 28%, #7a2a22, #3a1310 70%); border-color: rgba(240,140,130,.45); color: #f2938c; border-radius: 20px; }
+.bubble {
+  margin-top: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface);
+  padding: 13px 14px; font-size: 13.2px; color: var(--text-2); line-height: 1.85; min-height: 92px;
+}
+.bubble .bh { display: flex; align-items: center; gap: 8px; font-size: 12.6px; color: var(--text-3); margin-bottom: 9px; }
+.bubble .src { background: var(--chip); border-left: 2px solid var(--gold); padding: 6px 10px; border-radius: 6px; color: var(--text-3); font-size: 12.4px; margin-bottom: 9px; }
+.bubble .tr { color: var(--text); }
+.bubble .acts { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 11px; }
+.bubble .acts .mini-link {
+  font-size: 12.4px; padding: 5px 10px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--surface-2); cursor: pointer; color: var(--text-2);
+}
+.bubble .acts .mini-link:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ---------- 响应式 ---------- */
+@media (max-width: 1080px) {
+  .tasks { grid-template-columns: repeat(2, 1fr); }
+  .flow { grid-template-columns: repeat(2, 1fr); }
+  .kg-wrap { grid-template-columns: 1fr; }
+}
+@media (max-width: 920px) {
+  .nav-links, .nav-actions .btn { display: none; }
+  .nav-burger { display: grid; }
+  .hero-grid, .showcase, .lab, .compare, .cta-grid, .stack,
+  .rb-grid, .sw-grid, .ball-grid { grid-template-columns: 1fr; }
+  .rb-grid .card, .sw-grid .card, .ball-grid .card { grid-column: auto; }
+  .sel-menu { transform: translate(-50%, 4px); }
+  .app-window { transform: none; }
+  .ball-float { right: 6px; bottom: -18px; width: 74px; height: 74px; font-size: 25px; }
+  .ball-tip { display: none; }
+  .stats { grid-template-columns: repeat(2, 1fr); }
+  .caps { grid-template-columns: 1fr; }
+  .dual { grid-template-columns: 1fr; }
+  section { padding: 62px 0; }
+  .cta { padding: 28px; }
+  .flow-line { display: none; }
+}
+@media (max-width: 560px) {
+  .tasks, .flow, .stats { grid-template-columns: 1fr; }
+  .tiles { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
+  .reveal { opacity: 1; transform: none; }
+}
+</style>
+</head>
+<body>
+<div class="bg-aurora" aria-hidden="true"></div>
+<div class="bg-grid" aria-hidden="true"></div>
+<div class="progress" id="progress" aria-hidden="true"></div>
+
+<!-- ===================== 导航 ===================== -->
+<header class="nav" id="nav">
+  <div class="nav-inner">
+    <a class="brand" href="#hero">
+      <span class="brand-mark">法</span>
+      <span class="brand-name">法元 · Faron<br /><em>本地优先的 AI 法律工作台</em></span>
+    </a>
+    <nav class="nav-links" id="navLinks" aria-label="页面导航">
+      <a href="#capabilities">核心能力</a>
+      <a href="#product">产品实况</a>
+      <a href="#search">法规检索</a>
+      <a href="#runbook">智能体演练</a>
+      <a href="#audit">引用自检</a>
+      <a href="#kg">知识图谱</a>
+      <a href="#faq">常见问题</a>
+    </nav>
+    <div class="nav-actions">
+      <button class="icon-btn" id="themeBtn" title="切换日间 / 夜间模式" aria-label="切换主题">
+        <svg class="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.2 5.2l1.6 1.6M17.2 17.2l1.6 1.6M18.8 5.2l-1.6 1.6M6.8 17.2l-1.6 1.6"/></svg>
+        <svg class="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1z"/></svg>
+      </button>
+      <a class="btn btn-primary btn-sm" href="#download">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M12 3.5v11M7.5 10l4.5 4.5 4.5-4.5M4.5 19.5h15"/></svg>
+        下载 Windows 版
+      </a>
+      <button class="icon-btn nav-burger" id="burger" aria-label="展开导航" aria-expanded="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+  <div class="mobile-menu" id="mobileMenu">
+    <a href="#capabilities">核心能力</a>
+    <a href="#product">产品实况</a>
+    <a href="#search">法规检索工作台</a>
+    <a href="#runbook">智能体演练（亲手跑一次）</a>
+    <a href="#ball">悬浮球划词体验</a>
+    <a href="#audit">引用自检实验室</a>
+    <a href="#compare">差异对比</a>
+    <a href="#kg">知识图谱</a>
+    <a href="#tasks">5 类任务</a>
+    <a href="#stack">技术底座</a>
+    <a href="#download">下载</a>
+    <a href="#faq">常见问题</a>
+  </div>
+</header>
+
+<main>
+<!-- ===================== Hero ===================== -->
+<section id="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <div class="badge-row reveal">
+        <span class="badge"><i class="dot"></i> 数据不出本机</span>
+        <span class="badge g"><i class="dot"></i> 152,940 条真实条文</span>
+        <span class="badge"><i class="dot"></i> 确定性引用自检</span>
+      </div>
+      <h1 class="reveal">让法律工作者的<span class="grad">每一次引用</span><br />都落在真实法条上</h1>
+      <p class="hero-sub reveal">
+        法元是装在你自己电脑里的法律工作台：内置日本与美国法典条文级库，
+        文书智能体按计划分步执行，交付物必须通过<strong>规则级引用自检</strong>才出稿——
+        案件材料、检索记录、成稿全部留在本机。
+      </p>
+      <div class="hero-cta reveal">
+        <a class="btn btn-primary" href="https://github.com/lin612320/Legal-Workspace/releases/download/v0.7.1-%E8%B5%9B%E4%BA%8B%E7%89%88/Faron-0.7.1-x64-setup.exe" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M12 3.5v11M7.5 10l4.5 4.5 4.5-4.5M4.5 19.5h15"/></svg>
+          下载 Windows 版（0.7.1）
+        </a>
+        <a class="btn" href="#product">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 5.5v13l10-6.5-10-6.5z"/></svg>
+          先看功能实况
+        </a>
+      </div>
+      <p class="hero-note reveal">Windows 10/11 x64 · 安装包约 135 MB（内嵌法库）· 无需注册账号</p>
+      <div class="hero-facts reveal">
+        <div class="hero-fact"><div class="k gold">8</div><div class="v">功能版块</div></div>
+        <div class="hero-fact"><div class="k gold">5</div><div class="v">类文书任务</div></div>
+        <div class="hero-fact"><div class="k gold">15</div><div class="v">种翻译目标语种</div></div>
+        <div class="hero-fact"><div class="k gold">0</div><div class="v">条数据上传云端</div></div>
+      </div>
+    </div>
+
+    <div style="position:relative" class="reveal">
+      <div class="app-window">
+        <div class="win-bar">
+          <span class="traffic"><i></i><i></i><i></i></span>
+          <span class="win-title">法元 · 首页总览</span>
+          <span class="pill" style="margin-left:auto">本地库已就绪</span>
+        </div>
+        <div class="win-body">
+          <div class="win-side">
+            <div class="si on"><b></b>首页总览</div>
+            <div class="si"><b></b>法规查询</div>
+            <div class="si"><b></b>模板库</div>
+            <div class="si"><b></b>文书智能体</div>
+            <div class="si"><b></b>翻译</div>
+            <div class="si"><b></b>待办提醒</div>
+            <div class="si"><b></b>数据设置</div>
+          </div>
+          <div class="win-main">
+            <div class="win-h">今日概览</div>
+            <div class="tiles">
+              <div class="tile"><div class="n">2</div><div class="l">今日待办</div></div>
+              <div class="tile"><div class="n">3</div><div class="l">进行中</div></div>
+              <div class="tile"><div class="n" style="color:var(--red)">1</div><div class="l">已超期</div></div>
+            </div>
+            <div class="mini-row done"><span class="check on">✓</span><span>整理合同争议条款清单</span><span class="pill ok">已完成</span></div>
+            <div class="mini-row"><span class="check"></span><span>提交答辩状（给客户确认）</span><span class="pill warn">即将到期</span></div>
+            <div class="mini-row"><span class="check"></span><span>整理合资合同出资凭证</span><span class="pill err">已超期</span></div>
+          </div>
+        </div>
+      </div>
+      <button class="ball-float" id="heroBall" type="button" title="桌面悬浮球：选中即译 / 即问 —— 点我看划词体验">法</button>
+      <div class="ball-tip">选中文字 → 划词翻译 / 关联查找 / 询问</div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 数据事实带 ===================== -->
+<section id="data" style="padding-top:0">
+  <div class="wrap">
+    <div class="stats">
+      <div class="card stat reveal" data-count="152940">
+        <div class="num"><span class="cnt">0</span></div>
+        <div class="lab">条文级法规（内置预置库）</div>
+        <div class="sub">日本 95,897 · 美国法典 57,037 · 中国民法典示例 6</div>
+        <div class="stat-bar"></div>
+      </div>
+      <div class="card stat reveal" data-count="2104">
+        <div class="num"><span class="cnt">0</span></div>
+        <div class="lab">部日本现行法</div>
+        <div class="sub">来源 e-Gov，含双语标题与领域分类</div>
+        <div class="stat-bar"></div>
+      </div>
+      <div class="card stat reveal" data-count="53">
+        <div class="num"><span class="cnt">0</span></div>
+        <div class="lab">个美国法典 Title</div>
+        <div class="sub">来源 govinfo；宪法官方中译 25 段内置</div>
+        <div class="stat-bar"></div>
+      </div>
+      <div class="card stat reveal" data-count="8">
+        <div class="num"><span class="cnt">0</span></div>
+        <div class="lab">个功能版块</div>
+        <div class="sub">检索 · 模板 · 智能体 · 翻译 · 待办 · 导入…</div>
+        <div class="stat-bar"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 核心能力 ===================== -->
+<section id="capabilities">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="eyebrow">核心能力</div>
+      <h2 class="title">不是"会聊天"，而是<span class="gold">能交稿</span></h2>
+      <p class="lede">六个能力互相咬合：真实法库负责"依据可靠"，引用自检负责"不出假条号"，知识图谱负责"要件不漏"，交付链路负责"能直接交出去"。</p>
+    </div>
+    <div class="caps">
+      <article class="card cap reveal" tabindex="0">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="11" cy="11" r="6.4"/><path d="M15.8 15.8L21 21"/></svg></div>
+        <h3>真实法库 · 条文级检索</h3>
+        <p>152,940 条日美法条文开箱即用，SQLite FTS5 全文检索 + 按法浏览 + 双语标题 + 条文跳转。</p>
+        <div class="more">展开细节 <span class="chev">▾</span></div>
+        <ul class="detail">
+          <li>按国家进入专属页：政体 / 法律体系概览 + 按领域分组的法律清单</li>
+          <li>整部法浏览页：阿拉伯数字 / 中文数字 / 罗马数字条文号一键跳转</li>
+          <li>正文可选中复制，一键打印或另存 PDF</li>
+          <li>中文关键词检索：命中译名与译文正文，无命中自动回退模糊匹配</li>
+        </ul>
+      </article>
+
+      <article class="card cap reveal" tabindex="0">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M12 3.5l7 3v6c0 4.2-2.9 7-7 8.1-4.1-1.1-7-3.9-7-8.1v-6l7-3z"/><path d="M9.2 12.2l2 2 3.6-4"/></svg></div>
+        <h3>确定性引用自检</h3>
+        <p><strong>规则级</strong>校验，不让模型自己检查自己：抽取正文里的条文号，逐一与检索工具真实返回的法条比对。</p>
+        <div class="more">展开细节 <span class="chev">▾</span></div>
+        <ul class="detail">
+          <li>未被工具实际覆盖的引用会被自动点名，交付前就能发现</li>
+          <li>再叠加一层图谱适用性校验：引用的法律名是否落在该案由的请求权基础范围内</li>
+          <li>自检结论写进交付物，客户与合议庭都能看到依据</li>
+        </ul>
+      </article>
+
+      <article class="card cap reveal" tabindex="0">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="5.5" r="2.4"/><circle cx="5.5" cy="17" r="2.4"/><circle cx="18.5" cy="17" r="2.4"/><path d="M10.4 7.6L7 14.6M13.6 7.6l3.4 7M7.9 17h8.2"/></svg></div>
+        <h3>知识图谱规划</h3>
+        <p>案由 → 构成要件 → 请求权基础 / 证据 / 争点 → 文书载体，骨架驱动计划卡，防止要件遗漏。</p>
+        <div class="more">展开细节 <span class="chev">▾</span></div>
+        <ul class="detail">
+          <li>5 类固定关系：构成要件是 / 请求权基础是 / 证明对象是 / 常见争点是 / 文书载体是</li>
+          <li>任务中真实命中的法条登记为<strong>候选边</strong>，人工 ✓ / ✕ 确认后才作为规划依据</li>
+          <li>法条节点只存"法律名"，不写具体条号，避免机器编造</li>
+        </ul>
+      </article>
+
+      <article class="card cap reveal" tabindex="0">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="3.2" y="4.6" width="17.6" height="14.8" rx="2.4"/><path d="M7.5 9h5M7.5 12.4h9M7.5 15.8h6"/></svg></div>
+        <h3>文书智能体 · 5 类任务</h3>
+        <p>合同审查 / 起诉状 / 证据目录 / 质证意见 / 代理词，每类有独立输出骨架与人工确认闸门。</p>
+        <div class="more">展开细节 <span class="chev">▾</span></div>
+        <ul class="detail">
+          <li>计划卡可人工编辑后再执行，一步一停、支持暂停与续跑</li>
+          <li>检索类步骤走自主工具调用循环，只引用工具真实返回的法条</li>
+          <li>执行日志逐条可查，历史任务可载入续跑</li>
+        </ul>
+      </article>
+
+      <article class="card cap reveal" tabindex="0">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M12 3.8l8 4.2-8 4.2-8-4.2 8-4.2z"/><path d="M4 12.4l8 4.2 8-4.2M4 16.6l8 4.2 8-4.2"/></svg></div>
+        <h3>多模态任务材料</h3>
+        <p>DOCX / PPTX / XLSX / TXT / MD / CSV 本地离线提取；PDF 与图片交给视觉模型转录并明确标注"非原文"。</p>
+        <div class="more">展开细节 <span class="chev">▾</span></div>
+        <ul class="detail">
+          <li>自研最小 ZIP 解析，不依赖外部转换服务，材料不出本机</li>
+          <li>单文档 20 万字符上限并按 UTF-8 边界安全截断</li>
+          <li>模型转录文本不进入原文引用口径，避免"机器转述"被当成证据</li>
+        </ul>
+      </article>
+
+      <article class="card cap reveal" tabindex="0">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4M9 12h6M9 15.5h6"/></svg></div>
+        <h3>交付闭环</h3>
+        <p>智能体产出 → 导出 .docx（原生标题与表格）→ 落入首页「最近文书」→ 一键用系统程序打开或定位。</p>
+        <div class="more">展开细节 <span class="chev">▾</span></div>
+        <ul class="detail">
+          <li>证据目录等表格型交付直接渲染成 Word 原生表格</li>
+          <li>浏览器预览形态下降级为 .md 下载，能力边界显式提示</li>
+          <li>翻译成果同样可导出 Word / Markdown 并记入最近文书</li>
+        </ul>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 产品实况 ===================== -->
+<section id="product">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="eyebrow">产品实况</div>
+      <h2 class="title">四个真实界面，点开看它在做什么</h2>
+      <p class="lede">下面每一屏都对应产品里的真实版块与交互（此处为界面还原演示，数据为示例）。</p>
+    </div>
+
+    <div class="tabs reveal" role="tablist" aria-label="产品模块">
+      <button class="tab" role="tab" id="tab-agent" aria-controls="p-agent" aria-selected="true" data-tab="agent">文书智能体</button>
+      <button class="tab" role="tab" id="tab-laws" aria-controls="p-laws" aria-selected="false" data-tab="laws">法规查询</button>
+      <button class="tab" role="tab" id="tab-translate" aria-controls="p-translate" aria-selected="false" data-tab="translate">翻译 · 文档全文</button>
+      <button class="tab" role="tab" id="tab-todo" aria-controls="p-todo" aria-selected="false" data-tab="todo">待办与悬浮球</button>
+    </div>
+
+    <!-- 智能体 -->
+    <div class="panel on" id="p-agent" role="tabpanel" aria-labelledby="tab-agent">
+      <div class="showcase">
+        <div class="card">
+          <div class="pane-h">合同审查任务 · 计划卡<span class="pill">可人工编辑</span></div>
+          <div class="pane-b">
+            <dl class="kv">
+              <dt>任务类型</dt><dd>合同审查（review）</dd>
+              <dt>案由匹配</dt><dd>涉外货物买卖合同纠纷</dd>
+              <dt>图谱骨架</dt><dd>构成要件 4 · 请求权基础 3 · 证据 2</dd>
+            </dl>
+            <div class="steps-mini">
+              <div class="step-mini done"><span class="idx">1</span><span>检索争议解决与违约条款依据</span><span class="pill ok">已完成</span></div>
+              <div class="step-mini done"><span class="idx">2</span><span>载入「合同」类模板骨架</span><span class="pill ok">已完成</span></div>
+              <div class="step-mini run"><span class="idx">3</span><span>起草审查意见（逐条风险 + 修改建议）</span><span class="pill warn">执行中</span></div>
+              <div class="step-mini"><span class="idx">4</span><span>质检：引用自检 + 图谱适用性校验</span><span class="pill">待人工确认</span></div>
+            </div>
+            <div class="controls">
+              <button class="btn btn-primary btn-sm" id="goRunbook" type="button">▶ 到演练台亲手跑一次</button>
+              <span class="hint-inline">可暂停 / 单步 / 注入假条号，看质检在交付前拦下来</span>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="pane-h">执行日志</div>
+          <div class="pane-b">
+            <div class="log">
+              <div><i>14:02:11</i> <b>plan</b> 生成计划卡 · 4 步 · 已注入案由骨架</div>
+              <div><i>14:02:19</i> <b>tool</b> laws_search(keyword=违约金, country=日本) → 命中 12 条</div>
+              <div><i>14:02:24</i> <b>tool</b> template_load(category=合同) → 已载入模板</div>
+              <div><i>14:02:36</i> <b>reason</b> 起草审查意见 · 引用 3 处法条</div>
+              <div><i>14:02:41</i> <b>qa</b> 引用自检：3/3 命中本地库</div>
+              <div><i>14:02:41</i> <b>qa</b> 适用性校验：均在请求权基础范围内</div>
+              <div><i>14:02:42</i> <b>deliver</b> 导出 .docx → 已记入最近文书</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 法规 -->
+    <div class="panel" id="p-laws" role="tabpanel" aria-labelledby="tab-laws">
+      <div class="showcase">
+        <div class="card">
+          <div class="pane-h">按法浏览 · 日本<span class="pill">2,104 部现行法</span></div>
+          <div class="pane-b">
+            <div class="mini-row" style="background:var(--surface-2)"><span>民法</span><span class="pill">第 415 条</span></div>
+            <div class="mini-row"><span>商法</span><span class="pill">涉外合同</span></div>
+            <div class="mini-row"><span>民事訴訟法</span><span class="pill">证据</span></div>
+            <div class="mini-row"><span>会社法</span><span class="pill">出资</span></div>
+            <div class="mini-row"><span>労働基準法</span><span class="pill">劳动关系</span></div>
+            <p class="muted" style="margin-top:12px;font-size:12.6px">法名展示「原文 + 中文译名」，按法律领域分组，可折叠浏览</p>
+          </div>
+        </div>
+        <div class="card">
+          <div class="pane-h">条文命中<span class="pill ok">可复制 · 可跳转</span></div>
+          <div class="pane-b">
+            <div class="area">
+              <strong>民法 第 415 条（債務不履行による損害賠償）</strong><br />
+              債務者がその債務の本旨に従った履行をしないとき…<br /><br />
+              <span class="muted">中文译文</span><br />
+              债务人不按债务本旨履行时，债权人可以请求赔偿因此产生的损害……
+            </div>
+            <div class="controls">
+              <button class="btn btn-sm" id="lawsPrint" type="button">打印 / 另存 PDF</button>
+              <button class="btn btn-sm" id="lawsCopy" type="button">复制条文</button>
+              <button class="btn btn-sm" id="lawsJump" type="button">跳到 第 541 条</button>
+            </div>
+            <p class="hint-inline" style="margin-top:10px">这三个按钮不是摆设：它们会直接驱动下方「法规检索工作台」的同一条条文。</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 翻译 -->
+    <div class="panel" id="p-translate" role="tabpanel" aria-labelledby="tab-translate">
+      <div class="showcase">
+        <div class="card">
+          <div class="pane-h">文档全文翻译<span class="pill">导入 → 全文 → 导出</span></div>
+          <div class="pane-b">
+            <div class="langbar">
+              <select aria-label="源语言"><option>自动检测</option></select>
+              <button class="btn btn-sm" type="button">⇄</button>
+              <select aria-label="目标语言"><option>中文</option><option>英文</option><option>日文</option></select>
+              <span class="pill">AI 接口</span>
+            </div>
+            <div class="dual">
+              <div class="area">己方与日本公司签订合资经营合同，约定出资比例与验资程序……（导入自 合资合同.docx · 全文约 1.2 万字）</div>
+              <div class="area out">本公司と日本企業との間で締結した合弁事業契約は、出資比率及び資本検証の手続を定め、出資の期限を二〇二六年三月三十一日とする。 日本側は出資を期限どおり履行せず、取締役会の招集にも応じない。 二度の書面による催告後もなお履行しないため、契約の解除及び損害賠償を請求する。 なお、不可抗力の主張については、相手方の内部事情は不可抗力に該当しないものと解する。</div>
+            </div>
+            <div class="controls">
+              <button class="btn btn-sm" type="button" id="transPick">选择文档</button>
+              <button class="btn btn-sm" type="button" id="transRun">全文翻译</button>
+              <button class="btn btn-sm btn-primary" type="button" id="transWord">导出 Word</button>
+              <span class="muted" style="font-size:12px" id="transHint">已译 4/4 段 · 术语跨段一致</span>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="pane-h">支持格式与边界</div>
+          <div class="pane-b">
+            <ul style="font-size:13.6px;color:var(--text-2);line-height:2">
+              <li>· DOCX / PPTX / XLSX / TXT / MD / CSV：<strong>本地提取</strong>，原件不上传</li>
+              <li>· PDF / 图片：由支持视觉或文件输入的模型转录，标注「非原文」</li>
+              <li>· 长文档按段落分块翻译，逐块流式回显，可随时停止</li>
+              <li>· 译文可导出 Word（.docx）或下载 Markdown</li>
+              <li>· 15 种目标语种 + 自动检测；翻译统一走你自己配置的 AI 接口</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 待办 -->
+    <div class="panel" id="p-todo" role="tabpanel" aria-labelledby="tab-todo">
+      <div class="showcase">
+        <div class="card">
+          <div class="pane-h">待办提醒<span class="pill">桌面系统通知</span></div>
+          <div class="pane-b">
+            <div class="mini-row"><span class="check"></span><span>提交答辩状</span><span class="pill warn">2 小时后到期</span></div>
+            <div class="mini-row done"><span class="check on">✓</span><span>整理合同争议条款清单</span><span class="pill ok">已完成</span></div>
+            <div class="mini-row"><span class="check"></span><span>整理合资合同出资凭证</span><span class="pill err">已超期</span></div>
+            <div class="log" style="margin-top:12px">
+              <div><b>法元 · 待办提醒</b></div>
+              <div>「提交答辩状」已到期或即将到期，请及时处理。</div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="pane-h">桌面悬浮球<span class="pill">Electron 子进程</span></div>
+          <div class="pane-b">
+            <div class="floating-ball-demo" id="fbSkinRoot" data-skin="gold">
+              <button class="fb" id="fbBtn" aria-label="点击体验悬浮球菜单">法</button>
+              <div class="fb-menu" id="fbMenu">
+                <button type="button">翻译</button>
+                <button type="button">关联查找</button>
+                <button type="button">询问 AI</button>
+              </div>
+            </div>
+            <p class="muted" style="font-size:12.6px;text-align:center;margin-top:10px">
+              点一下上面的圆球试试：三个动作会跳到下方「悬浮球划词体验」并真的执行；
+              真实产品中选中任意文字即弹出这三个动作，抓取模式可切换，外观皮肤可选（本页也可切，见下方皮肤按钮）。
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 法规检索工作台 ===================== -->
+<section id="search">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="eyebrow">法规检索工作台</div>
+      <h2 class="title">内置真法库，<span class="gold">现在就能搜</span></h2>
+      <p class="lede">
+        下面这台检索跑的是<strong>本页内置的示例条文库</strong>（31 条，节选自 e-Gov / govinfo / 民法典公开文本）：
+        中文关键词、原文关键词、条文号都能查，命中高亮、可复制、可打印；条文号支持<strong>阿拉伯数字 / 中文数字 / 罗马数字</strong>三种写法跳转。
+        完整库 152,940 条随安装包内置，检索与跳转逻辑与这里一致。
+      </p>
+    </div>
+    <div class="sw-grid">
+      <div class="card reveal">
+        <div class="pane-h">检索<span class="pill" id="swCount">示例库 0 条</span></div>
+        <div class="pane-b">
+          <div class="sw-bar">
+            <input class="input" id="swInput" type="search" autocomplete="off"
+                   placeholder="关键词，如：违约金 / 損害賠償 / 催告 / 举证 / confusion"
+                   aria-label="法规关键词检索" />
+            <button class="btn btn-primary btn-sm" id="swGo" type="button">检索</button>
+          </div>
+          <div class="chip-row" style="margin-top:12px">
+            <div class="chip-row" id="swCountry" role="group" aria-label="按国家筛选">
+              <button class="chip" type="button" data-country="" aria-pressed="true">全部</button>
+              <button class="chip" type="button" data-country="日本" aria-pressed="false">日本</button>
+              <button class="chip" type="button" data-country="美国" aria-pressed="false">美国</button>
+              <button class="chip" type="button" data-country="中国" aria-pressed="false">中国</button>
+            </div>
+            <select class="sel" id="swDomain" aria-label="按法律领域筛选"><option value="">全部领域</option></select>
+            <div class="seg" id="swMode" role="group" aria-label="检索方式">
+              <button type="button" data-mode="kw" class="on">关键词检索</button>
+              <button type="button" data-mode="law">按法浏览</button>
+            </div>
+          </div>
+
+          <div id="swKw" style="margin-top:14px">
+            <div class="hits" id="swHits"></div>
+          </div>
+
+          <div id="swLaw" style="margin-top:14px;display:none">
+            <div class="jumpbar" style="margin:0 0 12px">
+              <input class="input" id="swJump2" type="text" autocomplete="off"
+                     placeholder="按法跳条号：415 / 第四百一十五条 / CDXV" aria-label="按法浏览条号跳转" />
+              <button class="btn btn-sm" id="swJump2Go" type="button">跳转</button>
+              <span class="hint-inline" id="swJump2Hint">先在下面选一部法</span>
+            </div>
+            <div class="lawlist" id="swLawList"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card reveal">
+        <div class="pane-h">条文详情<span class="pill" id="swPill">未选择</span></div>
+        <div class="pane-b">
+          <div id="swDetail" class="detail-body">
+            <div class="empty">左侧检索或按法浏览，选中一条条文后<br />这里显示原文与中文译文，并提供条号跳转、复制、打印 PDF。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 智能体演练 ===================== -->
+<section id="runbook">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="eyebrow">智能体演练</div>
+      <h2 class="title">亲手跑一次，<span class="gold">一步一停</span></h2>
+      <p class="lede">
+        这是产品里「文书智能体」的真实执行形态：计划卡 → 分步执行 → 人工确认闸门 → 规则级质检 → 导出交付物。
+        下面这台演练可以执行、暂停、单步、续跑，也可以<strong>注入假条号或越界引用</strong>，看质检怎么把它们拦在交付之前。
+      </p>
+    </div>
+
+    <div class="card rb-top reveal">
+      <div class="row">
+        <span class="hint-inline">任务类型</span>
+        <div class="chip-row" id="rbTasks" role="group" aria-label="任务类型">
+          <button class="chip" type="button" data-task="review" aria-pressed="true">合同审查 review</button>
+          <button class="chip" type="button" data-task="lawsuit" aria-pressed="false">起诉状 lawsuit</button>
+          <button class="chip" type="button" data-task="evidence" aria-pressed="false">证据目录 evidence</button>
+        </div>
+        <span class="hint-inline" id="rbCase"></span>
+      </div>
+      <div class="row">
+        <button class="btn btn-primary btn-sm" id="rbRun" type="button">▶ 执行计划卡</button>
+        <button class="btn btn-sm" id="rbStep" type="button">⏭ 单步</button>
+        <button class="btn btn-sm" id="rbPause" type="button">⏸ 暂停</button>
+        <button class="btn btn-sm" id="rbReset" type="button">↺ 重置</button>
+        <span class="sp"></span>
+        <label class="switch"><input type="checkbox" id="rbGate" checked /><span class="track"></span><span>关键步骤人工确认</span></label>
+        <label class="switch"><input type="checkbox" id="rbFake" /><span class="track"></span><span>注入 1 处假条号</span></label>
+        <label class="switch"><input type="checkbox" id="rbScope" /><span class="track"></span><span>注入 1 处越界引用</span></label>
+      </div>
+      <div class="prog"><i id="rbProg"></i></div>
+    </div>
+
+    <div class="rb-grid">
+      <div class="card reveal">
+        <div class="pane-h">计划卡 · 可人工编辑<span class="pill" id="rbPlanPill">未开始</span></div>
+        <div class="pane-b">
+          <div class="steps-mini" id="rbSteps"></div>
+          <p class="hint-inline" style="margin-top:12px">
+            真实产品中每一步都能先改再跑；这里演示「执行 / 暂停 / 单步 / 确认闸门 / 续跑」。
+          </p>
+        </div>
+      </div>
+
+      <div class="card reveal">
+        <div class="pane-h">执行日志<span class="pill" id="rbLogPill">0 / 0 步</span></div>
+        <div class="pane-b"><div class="log scroll-box" id="rbLog"></div></div>
+      </div>
+
+      <div class="card reveal">
+        <div class="pane-h">交付物预览<span class="pill" id="rbDocPill">未生成</span></div>
+        <div class="pane-b">
+          <div class="docview scroll-box" id="rbDoc">
+            <div class="empty">执行到「起草 / 生成」步骤后，交付物会在这里逐段出现。</div>
+          </div>
+          <div class="controls">
+            <button class="btn btn-primary btn-sm" id="rbWord" type="button" disabled>导出 Word（.doc）</button>
+            <button class="btn btn-sm" id="rbMd" type="button" disabled>导出 Markdown</button>
+            <button class="btn btn-sm" id="rbCopy" type="button" disabled>复制全文</button>
+          </div>
+          <p class="hint-inline" id="rbExportHint" style="margin-top:10px">
+            交付物生成后可导出；真实产品导出的是 .docx（原生标题与表格）。
+          </p>
+        </div>
+      </div>
+
+      <div class="card reveal">
+        <div class="pane-h">最近文书<span class="pill" id="rbFilesPill">0 份</span></div>
+        <div class="pane-b">
+          <div class="files" id="rbFiles"><div class="empty">按「执行计划卡」跑到交付步骤，导出记录会落在这里</div></div>
+          <p class="hint-inline" style="margin-top:12px">
+            真实产品中此处可一键用系统程序打开或定位文件，重启后依然在；这里点击即可把同一份交付物下载下来。
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 桌面悬浮球 ===================== -->
+<section id="ball">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="eyebrow">桌面悬浮球</div>
+      <h2 class="title">选中一段文字，<span class="gold">球就浮出来</span></h2>
+      <p class="lede">
+        下面是一份模拟案情摘要：用鼠标<strong>选中任意一段文字</strong>，悬浮球会跟到选区旁边；点球展开「翻译 / 关联查找 / 询问 AI / 复制」，
+        四个动作都会真的执行——翻译走本页术语表，「关联查找」直接检索上面那台法规检索台的法库，查到就能跳过去看原文。外观皮肤与抓取模式也可切换。
+      </p>
+    </div>
+
+    <div class="ball-grid" id="ballSkinRoot" data-skin="gold">
+      <div class="card reveal">
+        <div class="pane-h">模拟案情摘要 · 可划词<span class="pill" id="ballSelPill">未选中</span></div>
+        <div class="pane-b">
+          <div class="doc-wrap" id="docWrap">
+            <div class="doc-mock" id="docMock">
+              <p>本案系涉外合资经营合同纠纷。己方与日本公司签订合资经营合同，约定<b>出资比例与验资程序</b>，出资期限为 2026 年 3 月 31 日，逾期未出资按未缴金额计付违约金。</p>
+              <p><b>日方逾期未出资且拒不召开董事会</b>，经两次书面催告后仍未履行，己方据此请求解除合同并赔偿损失，并要求对方承担相应违约责任。</p>
+              <p>日方抗辩称其内部审批尚未完成，属于不可抗力；己方认为该事由系其自身经营安排，不构成免责事由，且合同中关于出资期限的约定明确，不存在约定不明。</p>
+            </div>
+            <button class="sel-ball" id="selBall" data-skin="gold" type="button" aria-label="悬浮球：对选中文字执行动作">法</button>
+            <div class="sel-menu" id="selMenu" role="menu" aria-label="悬浮球动作">
+              <button type="button" data-act="translate">翻译</button>
+              <button type="button" data-act="link">关联查找</button>
+              <button type="button" data-act="ask">询问 AI</button>
+              <button type="button" data-act="copy">复制</button>
+            </div>
+          </div>
+          <div class="controls">
+            <button class="btn btn-sm" id="ballSample" type="button">用示例句子试一次</button>
+            <span class="hint-inline">也可以自己拖选上面的文字，球会跟着选区走</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card reveal">
+        <div class="pane-h">悬浮球设置与动作结果<span class="pill" id="ballActPill">待操作</span></div>
+        <div class="pane-b">
+          <div class="skin-bar">
+            <span class="hint-inline">外观皮肤</span>
+            <button class="skin-dot on" data-skin="gold" type="button" title="鎏金" aria-label="鎏金皮肤"></button>
+            <button class="skin-dot" data-skin="indigo" type="button" title="靛蓝" aria-label="靛蓝皮肤"></button>
+            <button class="skin-dot" data-skin="ink" type="button" title="墨玉" aria-label="墨玉皮肤"></button>
+            <button class="skin-dot" data-skin="seal" type="button" title="朱印" aria-label="朱印皮肤"></button>
+          </div>
+          <div class="skin-bar" style="margin-top:12px">
+            <span class="hint-inline">抓取模式</span>
+            <div class="seg" id="ballMode" role="group" aria-label="抓取模式">
+              <button type="button" data-mode="follow" class="on">跟随选区</button>
+              <button type="button" data-mode="fixed">固定右下</button>
+            </div>
+            <span class="hint-inline" id="ballSkinHint">皮肤与模式同时作用于产品实况里的那颗球</span>
+          </div>
+          <div class="bubble" id="ballBubble">
+            <div class="bh">悬浮球待命中</div>
+            选中文字后点球，这里会显示该动作的<strong>真实结果</strong>：翻译命中的术语、关联查找命中的条文、询问得到的答复草稿。
+          </div>
+          <div class="log" id="ballLog" style="margin-top:12px;max-height:158px;overflow:auto"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 引用自检实验室 ===================== -->
+<section id="audit">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="eyebrow">引用自检实验室</div>
+      <h2 class="title">亲手<span class="gold">注入一个假条号</span>，看它被抓出来</h2>
+      <p class="lede">这是本产品与其他 AI 助手最本质的区别：引用由<strong>规则</strong>逐条比对本地库，而不是让模型"自查一遍"。</p>
+    </div>
+
+    <div class="lab">
+      <div class="card reveal">
+        <div class="pane-h">交付物节选 · 法律适用部分</div>
+        <div class="pane-b">
+          <p class="memo" id="memo">
+            本案系涉外合资经营合同纠纷，日方逾期未出资且拒不召开董事会。
+            依<span class="cite" data-key="cn502">《中华人民共和国民法典》第五百零二条</span>关于合同生效之规定，
+            合同已依法成立并生效；就日方迟延履行，
+            <span class="cite" data-key="jp415">日本民法第 415 条</span>规定债权人可请求损害赔偿；
+            另参<span class="cite" data-key="us1125">美国法典 Title 15 § 1125</span>关于商业标识之规定，
+            结合本案事实，我们认为日方应承担出资违约责任并赔偿相应损失。
+          </p>
+          <div class="controls">
+            <button class="btn btn-primary btn-sm" id="runAudit" type="button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M9.2 12.2l2 2 3.6-4"/><circle cx="12" cy="12" r="8.4"/></svg>
+              运行引用自检
+            </button>
+            <label class="switch">
+              <input type="checkbox" id="injectWrong" />
+              <span class="track"></span>
+              <span>注入一处不存在的条文号</span>
+            </label>
+          </div>
+          <p class="hint-inline" style="margin-top:12px">
+            校验逻辑：抽取正文引用 → 解析「法名 + 条号」→ 与上方「法规检索工作台」的<strong>同一份本地库</strong>比对；
+            库里没有的条号一律判为编造。想亲手检索这些条文，去上面的检索台试试。
+          </p>
+        </div>
+      </div>
+
+      <div class="card reveal">
+        <div class="pane-h">自检报告<span class="pill" id="auditPill">待运行</span></div>
+        <div class="pane-b">
+          <div class="report" id="report">
+            <div class="h">$ 等待执行质检…</div>
+            <div style="color:var(--text-3)">点击左侧「运行引用自检」，逐条比对本地法库。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 对比 ===================== -->
+<section id="compare">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="eyebrow">差异对比</div>
+      <h2 class="title">通用 AI 助手 vs <span class="gold">法元</span></h2>
+      <p class="lede">同一条提示词，差别不在"文笔"，而在法条从哪来、数据放哪、能不能交出去。</p>
+    </div>
+    <div class="compare">
+      <div class="card cmp-col a reveal">
+        <h3><span class="ico">?</span> 通用 AI 助手</h3>
+        <ul>
+          <li><span class="mk">·</span> 法条来自模型记忆，条号正确性无法核验</li>
+          <li><span class="mk">·</span> "自查一遍"仍是模型自述，没有独立校验</li>
+          <li><span class="mk">·</span> 案件材料必须上传到别人的服务器</li>
+          <li><span class="mk">·</span> 输出一段文字，格式与交付文件要手工重排</li>
+          <li><span class="mk">·</span> 没有结构化案由 / 要件 / 证据管理</li>
+          <li><span class="mk">·</span> 检索能力取决于对话窗口，无法按法浏览</li>
+        </ul>
+      </div>
+      <div class="card cmp-col b reveal">
+        <h3><span class="ico">法</span> 法元 · Faron</h3>
+        <ul>
+          <li><span class="mk">✓</span> 152,940 条条文级本地库，来源可溯源到 e-Gov / govinfo</li>
+          <li><span class="mk">✓</span> 规则级引用自检 + 图谱适用性校验，双重把关</li>
+          <li><span class="mk">✓</span> 数据全在本机 SQLite；仅调用你自己配置的模型接口</li>
+          <li><span class="mk">✓</span> 直接导出 .docx（原生标题与表格）并落入最近文书</li>
+          <li><span class="mk">✓</span> 知识图谱管理案由 → 要件 → 请求权基础 → 证据</li>
+          <li><span class="mk">✓</span> 按法浏览 + 条文跳转 + 打印 PDF，离线可用</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 知识图谱 ===================== -->
+<section id="kg">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="eyebrow">知识图谱</div>
+      <h2 class="title">把"要件不漏"变成<span class="gold">可检查的结构</span></h2>
+      <p class="lede">图谱由人工策展种子 + 任务真实命中 + 人工确认构成，全部存本机。鼠标移到节点上看邻接关系，右侧候选边可以点确认或拒绝。</p>
+    </div>
+    <div class="kg-wrap">
+      <div class="card reveal" style="padding:14px">
+        <svg class="kg-svg" id="kgSvg" viewBox="0 0 880 430" role="img" aria-label="知识图谱示例：案由到要件到请求权基础">
+          <!-- 边 -->
+          <g id="kgEdges">
+            <line class="kg-edge" data-from="case" data-to="e1"></line>
+            <line class="kg-edge" data-from="case" data-to="e2"></line>
+            <line class="kg-edge" data-from="case" data-to="e3"></line>
+            <line class="kg-edge" data-from="case" data-to="e4"></line>
+            <line class="kg-edge" data-from="e1" data-to="l1"></line>
+            <line class="kg-edge" data-from="e2" data-to="l1"></line>
+            <line class="kg-edge" data-from="e3" data-to="l2"></line>
+            <line class="kg-edge" data-from="e4" data-to="l3"></line>
+            <line class="kg-edge" data-from="e2" data-to="ev1"></line>
+            <line class="kg-edge" data-from="e3" data-to="ev2"></line>
+            <line class="kg-edge" data-from="e1" data-to="i1"></line>
+            <line class="kg-edge" data-from="i1" data-to="d1"></line>
+            <line class="kg-edge" data-from="l1" data-to="d1"></line>
+            <line class="kg-edge cand" data-from="e3" data-to="l4" id="candEdge"></line>
+          </g>
+          <!-- 节点 -->
+          <g class="kg-node" data-id="case" data-label="涉外合资经营合同纠纷">
+            <circle r="13" fill="#d8b26a"></circle>
+            <text y="-22" text-anchor="middle" fill="currentColor" font-size="13.5" font-weight="600">涉外合资经营合同纠纷</text>
+          </g>
+          <g class="kg-node" data-id="e1"><circle r="9" fill="#6ea8fe"></circle><text y="-16" text-anchor="middle" font-size="12" fill="currentColor">合同成立生效</text></g>
+          <g class="kg-node" data-id="e2"><circle r="9" fill="#6ea8fe"></circle><text y="-16" text-anchor="middle" font-size="12" fill="currentColor">出资义务履行</text></g>
+          <g class="kg-node" data-id="e3"><circle r="9" fill="#6ea8fe"></circle><text y="-16" text-anchor="middle" font-size="12" fill="currentColor">迟延履行与催告</text></g>
+          <g class="kg-node" data-id="e4"><circle r="9" fill="#6ea8fe"></circle><text y="-16" text-anchor="middle" font-size="12" fill="currentColor">损害与因果关系</text></g>
+          <g class="kg-node" data-id="l1"><circle r="8" fill="#d8b26a"></circle><text y="-15" text-anchor="middle" font-size="11.5" fill="currentColor">民法</text></g>
+          <g class="kg-node" data-id="l2"><circle r="8" fill="#d8b26a"></circle><text y="-15" text-anchor="middle" font-size="11.5" fill="currentColor">商法</text></g>
+          <g class="kg-node" data-id="l3"><circle r="8" fill="#d8b26a"></circle><text y="-15" text-anchor="middle" font-size="11.5" fill="currentColor">民事訴訟法</text></g>
+          <g class="kg-node" data-id="l4" id="candNode" opacity=".45"><circle r="8" fill="none" stroke="#74829c" stroke-dasharray="3 3"></circle><text y="-15" text-anchor="middle" font-size="11.5" fill="#74829c">会社法（候选）</text></g>
+          <g class="kg-node" data-id="ev1"><circle r="7.5" fill="#4ade80"></circle><text y="20" text-anchor="middle" font-size="11.5" fill="currentColor">出资凭证</text></g>
+          <g class="kg-node" data-id="ev2"><circle r="7.5" fill="#4ade80"></circle><text y="20" text-anchor="middle" font-size="11.5" fill="currentColor">催告函</text></g>
+          <g class="kg-node" data-id="i1"><circle r="7.5" fill="#f0b429"></circle><text y="20" text-anchor="middle" font-size="11.5" fill="currentColor">管辖权争点</text></g>
+          <g class="kg-node" data-id="d1"><circle r="9" fill="#c9d7f5"></circle><text y="22" text-anchor="middle" font-size="11.5" fill="currentColor">代理词 / 起诉状</text></g>
+        </svg>
+        <div class="legend">
+          <span><i style="background:#d8b26a"></i>案由 / 法律</span>
+          <span><i style="background:#6ea8fe"></i>构成要件</span>
+          <span><i style="background:#4ade80"></i>证据</span>
+          <span><i style="background:#f0b429"></i>常见争点</span>
+          <span><i style="background:#c9d7f5"></i>文书载体</span>
+        </div>
+      </div>
+
+      <div class="card reveal">
+        <div class="pane-h">候选边 · 人工确认<span class="pill">低置信度</span></div>
+        <div class="pane-b">
+          <p class="muted" style="font-size:13.2px;margin-bottom:10px">
+            任务执行中真实命中的法条会登记为候选边（虚线），<strong>确认后才作为后续规划依据</strong>——图谱不会自己长大。
+          </p>
+          <div class="cand-row" id="candRow1">
+            <span>会社法 → 迟延履行与催告</span>
+            <span class="acts">
+              <button class="mini-btn yes" type="button" title="确认该候选边" data-ok="1">✓</button>
+              <button class="mini-btn no" type="button" title="拒绝该候选边" data-ok="0">✕</button>
+            </span>
+          </div>
+          <div class="log" style="margin-top:14px" id="kgLog">
+            <div><i>图谱状态</i> 节点 13 · 边 14 · 待确认候选边 1</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 5 类任务 ===================== -->
+<section id="tasks">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="eyebrow">文书智能体</div>
+      <h2 class="title">五类任务，各有<span class="gold">输出骨架</span></h2>
+      <p class="lede">点开每张卡看它交付什么，不是"生成一段话"，而是有固定结构的可交稿文书。</p>
+    </div>
+    <div class="tasks">
+      <article class="card task reveal" tabindex="0">
+        <div class="k">review</div><h4>合同审查</h4>
+        <p class="muted" style="font-size:13px">风险条款 → 责任失衡 → 可采用的修改文本</p>
+        <ul class="out">
+          <li>先风险后建议，逐条对应原文</li>
+          <li>责任失衡与约定不明单独成段</li>
+          <li>给出可直接替换的条款表述</li>
+        </ul>
+      </article>
+      <article class="card task reveal" tabindex="0">
+        <div class="k">lawsuit</div><h4>起诉状</h4>
+        <p class="muted" style="font-size:13px">当事人 → 诉讼请求 → 事实与理由 → 证据目录</p>
+        <ul class="out">
+          <li>请求权基础与诉请一一对应</li>
+          <li>事实按时间线组织并标注证据</li>
+          <li>管辖与主体资格单列说明</li>
+        </ul>
+      </article>
+      <article class="card task reveal" tabindex="0">
+        <div class="k">evidence</div><h4>证据目录</h4>
+        <p class="muted" style="font-size:13px">编号 → 证据名称 → 证明对象 → 页数</p>
+        <ul class="out">
+          <li>导出为 Word 原生表格</li>
+          <li>证明对象与要件逐项对齐</li>
+          <li>缺证项自动提示</li>
+        </ul>
+      </article>
+      <article class="card task reveal" tabindex="0">
+        <div class="k">cross_exam</div><h4>质证意见</h4>
+        <p class="muted" style="font-size:13px">合法性 → 真实性 → 关联性</p>
+        <ul class="out">
+          <li>三性逐项展开，结论要有依据</li>
+          <li>对证据形式瑕疵单独点名</li>
+          <li>给出可当庭陈述的表述</li>
+        </ul>
+      </article>
+      <article class="card task reveal" tabindex="0">
+        <div class="k">argument</div><h4>代理词</h4>
+        <p class="muted" style="font-size:13px">争议焦点 → 法律适用 → 结论</p>
+        <ul class="out">
+          <li>按争议焦点组织攻防</li>
+          <li>每处引用都过自检</li>
+          <li>附适用性校验结论</li>
+        </ul>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 工作流 ===================== -->
+<section id="flow">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="eyebrow">工作流</div>
+      <h2 class="title">四步走完一件委托</h2>
+      <p class="lede">每一步都可人工介入——这是"数字同事"，不是黑箱。</p>
+    </div>
+    <div class="flow reveal">
+      <div class="flow-line"></div>
+      <div class="card flow-item on" tabindex="0"><div class="n">STEP 01</div><h4>导入材料与案情</h4><p>DOCX / PDF / 图片 / Excel 本地提取文本，或直接粘贴案情摘要。</p></div>
+      <div class="card flow-item" tabindex="0"><div class="n">STEP 02</div><h4>生成计划卡</h4><p>图谱骨架驱动 4–7 个步骤，可人工增删改后再执行。</p></div>
+      <div class="card flow-item" tabindex="0"><div class="n">STEP 03</div><h4>一步一停执行</h4><p>检索走真实工具，起草走模型，关键步骤设人工确认闸门。</p></div>
+      <div class="card flow-item" tabindex="0"><div class="n">STEP 04</div><h4>质检并交付</h4><p>引用自检 + 适用性校验通过后导出 .docx，落入最近文书。</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 技术底座 ===================== -->
+<section id="stack">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="eyebrow">技术底座</div>
+      <h2 class="title">本地优先，<span class="gold">零服务端依赖</span></h2>
+      <p class="lede">一套安装包跑完整个产品：没有云数据库、没有中转服务器，AI 接口由你自己填。</p>
+    </div>
+    <div class="stack">
+      <div class="card tech reveal"><div class="tk">🦀</div><div><h4>Tauri 2 + Rust 后端</h4><p>文件解析、SQLite、docx 生成、系统通知全部在本地进程完成；安装包约 135 MB，含法库预置数据。</p></div></div>
+      <div class="card tech reveal"><div class="tk">🗄️</div><div><h4>SQLite + FTS5</h4><p>152,940 条条文与全文索引；案件、任务、文书、记忆向量同库，备份与还原就是一个 .db 文件。</p></div></div>
+      <div class="card tech reveal"><div class="tk">⚛️</div><div><h4>React 18 + TypeScript</h4><p>8 个版块共用一套设计系统，支持日间 / 夜间主题；桌面与浏览器预览双形态自适应。</p></div></div>
+      <div class="card tech reveal"><div class="tk">🔒</div><div><h4>密钥加密落盘</h4><p>API Key 混淆后存本机 SQLite，不进日志、不上传；模型接口地址与模型名由你掌控。</p></div></div>
+      <div class="card tech reveal"><div class="tk">🪟</div><div><h4>Electron 桌面悬浮球</h4><p>独立子进程常驻托盘，选中即译 / 即问，抓取模式可切换，外观皮肤可选。</p></div></div>
+      <div class="card tech reveal"><div class="tk">🧩</div><div><h4>可离线复用</h4><p>法库检索、按法浏览、模板库、待办、备份完全离线；仅 AI 起草与翻译需要联网。</p></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 下载 ===================== -->
+<section id="download">
+  <div class="wrap">
+    <div class="cta reveal">
+      <div class="cta-grid">
+        <div>
+          <div class="eyebrow">开始使用</div>
+          <h2 class="title" style="font-size:clamp(24px,3vw,33px)">装上就能用，连法库一起给你</h2>
+          <p class="lede">Windows 10/11 x64 · 版本 0.7.1 · 安装包约 135 MB（内嵌约 490 MB 法库与悬浮球）。装完不需要注册，第一次打开即可检索 152,940 条条文。</p>
+          <div class="controls">
+            <a class="btn btn-primary" href="https://github.com/lin612320/Legal-Workspace/releases/download/v0.7.1-%E8%B5%9B%E4%BA%8B%E7%89%88/Faron-0.7.1-x64-setup.exe" target="_blank" rel="noopener">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M12 3.5v11M7.5 10l4.5 4.5 4.5-4.5M4.5 19.5h15"/></svg>
+              下载 Windows 安装包
+            </a>
+            <button class="btn" id="copyPath" type="button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 5.5H6.5A1.5 1.5 0 0 0 5 7v8.5"/></svg>
+              复制下载链接
+            </button>
+          </div>
+          <p class="hero-note" id="copyHint">安装包托管在 GitHub Releases，直链可直接分享给他人（无需账号即可下载）。</p>
+        </div>
+        <div class="dl-list">
+          <a class="dl" href="https://github.com/lin612320/Legal-Workspace/releases/download/v0.7.1-%E8%B5%9B%E4%BA%8B%E7%89%88/Faron-0.7.1-x64-setup.exe" target="_blank" rel="noopener">
+            <span class="ic">🪟</span>
+            <span><span class="t">法元 0.7.1 安装包（Windows x64）</span><br /><span class="s">约 135 MB · 内嵌法库与悬浮球 · 免注册</span></span>
+            <span class="go">↓</span>
+          </a>
+          <a class="dl" href="https://github.com/lin612320/Legal-Workspace/releases" target="_blank" rel="noopener">
+            <span class="ic">📘</span>
+            <span><span class="t">发布页与更新日志</span><br /><span class="s">各版本更新说明与历史安装包</span></span>
+            <span class="go">→</span>
+          </a>
+          <a class="dl" href="https://github.com/lin612320/Legal-Workspace" target="_blank" rel="noopener">
+            <span class="ic">🧪</span>
+            <span><span class="t">源码与产品文档</span><br /><span class="s">技术架构 / 功能模块 / 数据库设计 / 真机验收</span></span>
+            <span class="go">→</span>
+          </a>
+          <p class="hint-box">
+            首次打开如果 Windows 提示「已损坏」或「未验证」，是因为安装包尚未做代码签名：
+            右键安装包 → 属性 → 勾选「解除锁定」；或点「更多信息 → 仍要运行」。
+            升级前建议先在托盘退出正在运行的悬浮球。
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== FAQ ===================== -->
+<section id="faq">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="eyebrow">常见问题</div>
+      <h2 class="title">客户与评委最常问的七个问题</h2>
+    </div>
+    <div class="faq reveal">
+      <div class="faq-item">
+        <button class="faq-q" type="button" aria-expanded="false">案件材料会被上传到云端吗？<span class="pm">＋</span></button>
+        <div class="faq-a"><div>不会。法库、案件材料、任务、文书、记忆向量全部存在本机 SQLite 数据库里。只有你主动使用 AI 起草或翻译时，当次输入才会发送到<strong>你自己配置的模型接口</strong>；API Key 加密后存本机。</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" type="button" aria-expanded="false">需要自己准备 API Key 吗？<span class="pm">＋</span></button>
+        <div class="faq-a"><div>AI 相关功能需要：在「数据设置」填写任意 OpenAI 兼容接口（如 DeepSeek）的地址、模型名与 Key，智能体与翻译共用这一份配置。不填也能用——法规检索、按法浏览、模板库、待办提醒、备份还原都完全离线可用，智能体会进入演示模式。</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" type="button" aria-expanded="false">法条会不会是模型编的？<span class="pm">＋</span></button>
+        <div class="faq-a"><div>检索类步骤<strong>只从本地库返回真实条文</strong>，模型无权凭空写入；交付物还要经过确定性引用自检（逐条号比对工具返回值）与图谱适用性校验；图谱中的法条节点只保存"法律名"，不写具体条号。三重约束就是为了防编造。</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" type="button" aria-expanded="false">支持哪些材料格式？<span class="pm">＋</span></button>
+        <div class="faq-a"><div>DOCX / PPTX / XLSX / XLS / TXT / MD / CSV / LOG 本地离线提取文本（单文档上限 20 万字符）；PDF 与图片需要配置支持文件或视觉输入的模型来转录，转录文本会明确标注「模型转录，非原文」，不进入原文引用口径。</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" type="button" aria-expanded="false">法库数据从哪来？<span class="pm">＋</span></button>
+        <div class="faq-a"><div>日本现行法 2,104 部（来源 e-Gov）、美国法典 53 个 Title（来源 govinfo）、美国宪法官方中译 25 段，条文级共 152,940 条内置；另有《中华人民共和国民法典》示例条目。中文的真实中文法库可通过 Excel 批量导入补充。</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" type="button" aria-expanded="false">能完全离线使用吗？<span class="pm">＋</span></button>
+        <div class="faq-a"><div>可以。除 AI 起草、翻译、PDF/图片转录这些需要模型接口的功能外，其余全部离线：法库检索、按法浏览、条文跳转、打印 PDF、模板库、待办提醒、备份还原。</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" type="button" aria-expanded="false">升级安装会不会丢数据？<span class="pm">＋</span></button>
+        <div class="faq-a"><div>不会。数据目录与工程名保持不变，升级只替换程序文件；悬浮球装入带版本号的子目录，升级时不与正在运行的旧悬浮球抢文件。仍建议在「数据设置」里定期手动备份（一个 .db 文件即可完整还原）。</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div class="foot-brand">
+        <div class="brand" style="margin-bottom:12px">
+          <span class="brand-mark">法</span>
+          <span class="brand-name">法元 · Faron<br /><em>本地优先的 AI 法律工作台</em></span>
+        </div>
+        <p class="muted" style="font-size:13.4px">法律工作者的本地桌面助手：真实法库 + 分步执行的文书智能体 + 规则级引用自检。</p>
+      </div>
+      <div class="foot-links">
+        <a href="#capabilities">核心能力</a>
+        <a href="#product">产品实况</a>
+        <a href="#search">法规检索台</a>
+        <a href="#runbook">智能体演练</a>
+        <a href="#ball">悬浮球划词</a>
+        <a href="#audit">引用自检</a>
+        <a href="#kg">知识图谱</a>
+        <a href="#download">下载</a>
+        <a href="#faq">常见问题</a>
+      </div>
+    </div>
+    <div class="foot-note">
+      <div>版本 0.7.1 · 工程名 legal-workbench · 本页为产品功能演示页，界面为还原演示，示例数据不代表真实案件。</div>
+      <div>法规数据版权归原发布机构所有（日本 e-Gov、美国 govinfo、constitutioncenter.org）。本页内容不构成法律意见。</div>
+    </div>
+  </div>
+</footer>
+
+<button class="totop" id="toTop" aria-label="回到顶部">
+  <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M12 19V6M6 11.5L12 5.5l6 6"/></svg>
+</button>
+
+<script>
+(function () {
+  "use strict";
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ---------- 主题 ---------- */
+  var themeBtn = document.getElementById("themeBtn");
+  var stored = null;
+  try { stored = localStorage.getItem("faron-demo-theme"); } catch (e) {}
+  if (stored) document.documentElement.setAttribute("data-theme", stored);
+  if (themeBtn) {
+    themeBtn.addEventListener("click", function () {
+      var next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+      document.documentElement.setAttribute("data-theme", next);
+      try { localStorage.setItem("faron-demo-theme", next); } catch (e) {}
+    });
+  }
+
+  /* ---------- 滚动进度 / 导航状态 / 回到顶部 ---------- */
+  var progress = document.getElementById("progress");
+  var nav = document.getElementById("nav");
+  var toTop = document.getElementById("toTop");
+  function onScroll() {
+    var h = document.documentElement;
+    var max = h.scrollHeight - h.clientHeight;
+    var y = h.scrollTop || document.body.scrollTop;
+    if (progress) progress.style.width = (max > 0 ? (y / max) * 100 : 0) + "%";
+    if (nav) nav.classList.toggle("scrolled", y > 8);
+    if (toTop) toTop.classList.toggle("on", y > 700);
+  }
+  window.addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+  if (toTop) toTop.addEventListener("click", function () {
+    window.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" });
+  });
+
+  /* ---------- 移动端菜单 ---------- */
+  var burger = document.getElementById("burger");
+  var menu = document.getElementById("mobileMenu");
+  if (burger && menu) {
+    burger.addEventListener("click", function () {
+      var open = menu.classList.toggle("open");
+      burger.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+    menu.addEventListener("click", function (e) {
+      if (e.target.tagName === "A") {
+        menu.classList.remove("open");
+        burger.setAttribute("aria-expanded", "false");
+      }
+    });
+  }
+
+  /* ---------- 滚动显现 ---------- */
+  var revealEls = [].slice.call(document.querySelectorAll(".reveal"));
+  if ("IntersectionObserver" in window && !reduce) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (en.isIntersecting) { en.target.classList.add("in"); io.unobserve(en.target); }
+      });
+    }, { rootMargin: "0px 0px -8% 0px", threshold: 0.08 });
+    revealEls.forEach(function (el, i) {
+      el.style.transitionDelay = Math.min(i % 6, 5) * 45 + "ms";
+      io.observe(el);
+    });
+  } else {
+    revealEls.forEach(function (el) { el.classList.add("in"); });
+  }
+  // 兜底：极端环境（不支持/不交付 IO 的内嵌浏览器）下 3 秒后强制显现，避免页面看起来是空的
+  setTimeout(function () {
+    if (document.querySelectorAll(".reveal.in").length === 0) {
+      revealEls.forEach(function (el) { el.classList.add("in"); });
+    }
+  }, 3000);
+
+  /* ---------- 数字滚动 ---------- */
+  function animateCount(el) {
+    var target = parseInt(el.getAttribute("data-count"), 10) || 0;
+    var out = el.querySelector(".cnt");
+    if (!out) return;
+    var done = false;
+    function finish() {
+      if (done) return;
+      done = true;
+      out.textContent = target.toLocaleString("en-US");
+    }
+    if (reduce) { finish(); return; }
+    var start = performance.now(), dur = 1400;
+    function frame(t) {
+      if (done) return;                       // 兜底已落值 → 不再被慢帧覆盖
+      var p = Math.min((t - start) / dur, 1);
+      if (p >= 1) { finish(); return; }
+      var eased = 1 - Math.pow(1 - p, 3);
+      out.textContent = Math.round(target * eased).toLocaleString("en-US");
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+    // 兜底：标签页在后台时浏览器会节流 rAF，确保最终值一定落到位
+    setTimeout(finish, dur + 120);
+  }
+  var statEls = [].slice.call(document.querySelectorAll("[data-count]"));
+  function inViewport(el) {
+    var r = el.getBoundingClientRect();
+    return r.top < (window.innerHeight || 0) && r.bottom > 0;
+  }
+  // 首屏可见的直接起动画，其余交给 IntersectionObserver（不依赖 IO 交付时机）
+  var pendingStats = statEls.filter(function (el) {
+    if (inViewport(el)) { animateCount(el); return false; }
+    return true;
+  });
+  if ("IntersectionObserver" in window && pendingStats.length) {
+    var io2 = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (en.isIntersecting) { animateCount(en.target); io2.unobserve(en.target); }
+      });
+    }, { threshold: 0.4 });
+    pendingStats.forEach(function (el) { io2.observe(el); });
+  } else {
+    pendingStats.forEach(animateCount);
+  }
+
+  /* ---------- 导航当前段高亮 ---------- */
+  var linkMap = {};
+  [].slice.call(document.querySelectorAll("#navLinks a")).forEach(function (a) {
+    linkMap[a.getAttribute("href").replace("#", "")] = a;
+  });
+  var sections = [].slice.call(document.querySelectorAll("main section[id]"));
+  if ("IntersectionObserver" in window) {
+    var io3 = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        var a = linkMap[en.target.id];
+        if (!a) return;
+        if (en.isIntersecting) {
+          Object.keys(linkMap).forEach(function (k) { linkMap[k].classList.remove("active"); });
+          a.classList.add("active");
+        }
+      });
+    }, { rootMargin: "-45% 0px -50% 0px" });
+    sections.forEach(function (s) { io3.observe(s); });
+  }
+
+  /* ---------- 卡片光标聚光 ---------- */
+  [].slice.call(document.querySelectorAll(".card")).forEach(function (card) {
+    card.addEventListener("mousemove", function (e) {
+      var r = card.getBoundingClientRect();
+      card.style.setProperty("--mx", (e.clientX - r.left) + "px");
+      card.style.setProperty("--my", (e.clientY - r.top) + "px");
+    });
+  });
+
+  /* ---------- 能力卡 / 任务卡 / 工作流 折叠 ---------- */
+  function bindToggle(sel, cls) {
+    [].slice.call(document.querySelectorAll(sel)).forEach(function (el) {
+      function toggle() { el.classList.toggle(cls || "open"); }
+      el.addEventListener("click", toggle);
+      el.addEventListener("keydown", function (e) {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); }
+      });
+    });
+  }
+  bindToggle(".cap", "open");
+  bindToggle(".task", "open");
+  [].slice.call(document.querySelectorAll(".flow-item")).forEach(function (el) {
+    el.addEventListener("click", function () {
+      [].slice.call(document.querySelectorAll(".flow-item")).forEach(function (x) { x.classList.remove("on"); });
+      el.classList.add("on");
+    });
+  });
+
+  /* ---------- Tab 切换 ---------- */
+  var tabs = [].slice.call(document.querySelectorAll(".tab"));
+  function selectTab(name) {
+    tabs.forEach(function (t) {
+      var on = t.getAttribute("data-tab") === name;
+      t.setAttribute("aria-selected", on ? "true" : "false");
+    });
+    [].slice.call(document.querySelectorAll(".panel")).forEach(function (p) {
+      p.classList.toggle("on", p.id === "p-" + name);
+    });
+  }
+  tabs.forEach(function (t, i) {
+    t.addEventListener("click", function () { selectTab(t.getAttribute("data-tab")); });
+    t.addEventListener("keydown", function (e) {
+      var dir = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+      if (!dir) return;
+      e.preventDefault();
+      var n = tabs[(i + dir + tabs.length) % tabs.length];
+      n.focus(); selectTab(n.getAttribute("data-tab"));
+    });
+  });
+
+  /* ---------- 悬浮球菜单 ---------- */
+  var fbBtn = document.getElementById("fbBtn"), fbMenu = document.getElementById("fbMenu");
+  if (fbBtn && fbMenu) {
+    fbBtn.addEventListener("click", function () { fbMenu.classList.toggle("on"); });
+    [].slice.call(fbMenu.querySelectorAll("button")).forEach(function (b) {
+      if (!b.getAttribute("data-label")) b.setAttribute("data-label", b.textContent);
+      b.addEventListener("click", function () {
+        var label = b.getAttribute("data-label");
+        b.textContent = "已触发 ✓";
+        setTimeout(function () { b.textContent = label; }, 1200);
+      });
+    });
+  }
+
+  /* ---------- 引用自检实验室 ---------- */
+  var FAKE = "《中华人民共和国海商法》第九十九条";
+  var REAL = "《中华人民共和国民法典》第五百零二条";
+  var citeCN = document.querySelector('.cite[data-key="cn502"]');
+  var runBtn = document.getElementById("runAudit");
+  var inject = document.getElementById("injectWrong");
+  var report = document.getElementById("report");
+  var pill = document.getElementById("auditPill");
+  var memo = document.getElementById("memo");
+
+  if (inject && citeCN) {
+    inject.addEventListener("change", function () {
+      citeCN.textContent = inject.checked ? FAKE : REAL;
+      citeCN.classList.remove("ok", "bad", "checking");
+      pill.textContent = "待运行"; pill.className = "pill";
+      report.innerHTML = '<div class="h">$ 等待执行质检…</div><div style="color:var(--text-3)">交付物已修改，请重新运行自检。</div>';
+    });
+  }
+
+  if (runBtn) {
+    runBtn.addEventListener("click", function () {
+      var cites = [].slice.call(document.querySelectorAll("#memo .cite"));
+      cites.forEach(function (c) { c.classList.remove("ok", "bad", "checking"); });
+      pill.textContent = "校验中…"; pill.className = "pill warn";
+      report.innerHTML = '<div class="h">$ faron audit --refs --graph</div>';
+      runBtn.disabled = true;
+
+      var badCount = 0, i = 0;
+
+      function step() {
+        if (i >= cites.length) {
+          report.insertAdjacentHTML("beforeend",
+            '<div style="margin-top:8px">' +
+            (badCount === 0
+              ? '<span class="ok">✔ 结论：全部引用均有本地库依据，允许交付。</span>'
+              : '<span class="bad">✘ 结论：检出 ' + badCount + ' 处无法核验的引用，已阻断交付并要求重新检索。</span>') +
+            '</div>' +
+            '<div style="color:var(--text-3);margin-top:6px">说明：本校验为规则级比对（条文号 → 本地库命中），不是让模型自查。</div>');
+          pill.textContent = badCount === 0 ? "通过" : "未通过";
+          pill.className = "pill " + (badCount === 0 ? "ok" : "err");
+          runBtn.disabled = false;
+          return;
+        }
+        var c = cites[i];
+        var text = c.textContent.trim();
+        // 命中判定：与「法规检索工作台」共用同一份本地库，按「法名 + 条号」比对
+        var lib = resolveCite(text);
+        var hit = !!lib;
+        c.classList.add("checking");
+        report.insertAdjacentHTML("beforeend", '<div><i>· 比对</i> ' + esc(lib ? citeIndex(lib) : text) + ' …</div>');
+        setTimeout(function () {
+          c.classList.remove("checking");
+          if (hit) {
+            c.classList.add("ok");
+            report.insertAdjacentHTML("beforeend", '<div class="ok">  ✔ 命中本地库（' + esc(lib.src) + " " + esc(lib.noLabel) + '）· 来源可溯源</div>');
+          } else {
+            badCount++;
+            c.classList.add("bad");
+            report.insertAdjacentHTML("beforeend", '<div class="bad">  ✘ 未命中：本地库无此条文，疑似编造引用</div>');
+          }
+          i++; step();
+        }, reduce ? 0 : 420);
+      }
+      step();
+    });
+  }
+
+  /* ---------- 知识图谱：hover 高亮 + 候选边确认 ---------- */
+  var svg = document.getElementById("kgSvg");
+  if (svg) {
+    var edges = [].slice.call(svg.querySelectorAll(".kg-edge"));
+    var nodes = [].slice.call(svg.querySelectorAll(".kg-node"));
+    var POS = {
+      case: [150, 215],
+      e1: [340, 85], e2: [340, 175], e3: [340, 265], e4: [340, 355],
+      l1: [540, 120], l2: [540, 240], l3: [540, 350],
+      ev1: [680, 175], ev2: [680, 300],
+      i1: [540, 60], d1: [790, 120], l4: [790, 350]
+    };
+    edges.forEach(function (e) {
+      var a = POS[e.getAttribute("data-from")], b = POS[e.getAttribute("data-to")];
+      if (!a || !b) return;
+      e.setAttribute("x1", a[0]); e.setAttribute("y1", a[1]);
+      e.setAttribute("x2", b[0]); e.setAttribute("y2", b[1]);
+    });
+    nodes.forEach(function (n) {
+      var p = POS[n.getAttribute("data-id")];
+      if (!p) return;
+      n.setAttribute("transform", "translate(" + p[0] + "," + p[1] + ")");
+    });
+    function highlight(id) {
+      svg.classList.add("dim");
+      nodes.forEach(function (n) { n.classList.toggle("hl", n.getAttribute("data-id") === id); });
+      edges.forEach(function (e) {
+        var on = e.getAttribute("data-from") === id || e.getAttribute("data-to") === id;
+        e.classList.toggle("hl", on);
+      });
+    }
+    function clearHighlight() {
+      svg.classList.remove("dim");
+      nodes.forEach(function (n) { n.classList.remove("hl"); });
+      edges.forEach(function (e) { e.classList.remove("hl"); });
+    }
+    nodes.forEach(function (n) {
+      n.addEventListener("mouseenter", function () { highlight(n.getAttribute("data-id")); });
+      n.addEventListener("mouseleave", clearHighlight);
+      n.addEventListener("click", function () { highlight(n.getAttribute("data-id")); });
+    });
+    svg.addEventListener("mouseleave", clearHighlight);
+
+    var kgLog = document.getElementById("kgLog");
+    [].slice.call(document.querySelectorAll(".cand-row")).forEach(function (row) {
+      row.addEventListener("click", function (e) {
+        var btn = e.target.closest(".mini-btn");
+        if (!btn) return;
+        var ok = btn.getAttribute("data-ok") === "1";
+        row.classList.add("done");
+        row.insertAdjacentHTML("beforeend", '<span class="pill ' + (ok ? "ok" : "err") + '">' + (ok ? "已确认 ✓" : "已拒绝 ✕") + "</span>");
+        var candEdge = document.getElementById("candEdge");
+        var candNode = document.getElementById("candNode");
+        if (row.id === "candRow1") {
+          if (candEdge) {
+            candEdge.classList.toggle("cand", !ok);
+            candEdge.setAttribute("stroke", ok ? "#d8b26a" : "rgba(116,130,156,.35)");
+            candEdge.setAttribute("stroke-dasharray", ok ? "0" : "5 5");
+          }
+          if (candNode) candNode.setAttribute("opacity", ok ? "1" : ".28");
+        }
+        if (kgLog) {
+          kgLog.insertAdjacentHTML("beforeend",
+            "<div><i>" + (ok ? "已确认" : "已拒绝") + "</i> " + row.textContent.replace("✓", "").replace("✕", "").trim().slice(0, 34) +
+            (ok ? " → 已并入规划依据" : " → 候选边已删除") + "</div>");
+        }
+      });
+    });
+  }
+
+  /* ---------- FAQ 手风琴 ---------- */
+  [].slice.call(document.querySelectorAll(".faq-item")).forEach(function (item) {
+    var q = item.querySelector(".faq-q"), a = item.querySelector(".faq-a");
+    q.addEventListener("click", function () {
+      var open = item.classList.contains("open");
+      [].slice.call(document.querySelectorAll(".faq-item")).forEach(function (x) {
+        x.classList.remove("open");
+        x.querySelector(".faq-a").style.maxHeight = "0px";
+        x.querySelector(".faq-q").setAttribute("aria-expanded", "false");
+      });
+      if (!open) {
+        item.classList.add("open");
+        a.style.maxHeight = a.scrollHeight + 40 + "px";
+        q.setAttribute("aria-expanded", "true");
+      }
+    });
+  });
+
+  /* ---------- 复制下载链接 ---------- */
+  var copyBtn = document.getElementById("copyPath"), copyHint = document.getElementById("copyHint");
+  var DOWNLOAD_URL = "https://github.com/lin612320/Legal-Workspace/releases/download/" +
+    "v0.7.1-%E8%B5%9B%E4%BA%8B%E7%89%88/Faron-0.7.1-x64-setup.exe";
+  if (copyBtn) {
+    copyBtn.addEventListener("click", function () {
+      var done = function () {
+        copyBtn.textContent = "已复制 ✓";
+        if (copyHint) copyHint.textContent = "下载直链已复制，可直接发给他人：" + DOWNLOAD_URL;
+        setTimeout(function () { copyBtn.textContent = "复制下载链接"; }, 1800);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(DOWNLOAD_URL).then(done, function () {
+          if (copyHint) copyHint.textContent = "当前环境不允许自动复制，请手动记下：" + DOWNLOAD_URL;
+        });
+      } else if (copyHint) {
+        copyHint.textContent = "请手动复制：" + DOWNLOAD_URL;
+      }
+    });
+  }
+  /* ============================================================
+     新增演示模块（④–⑧）
+     ④ 内置示例法库：检索台 / 智能体质检 / 悬浮球关联查找 / 引用自检 共用
+     ⑤ 法规检索工作台  ⑥ 智能体演练  ⑦ 桌面悬浮球划词  ⑧ 交付物导出
+     ============================================================ */
+
+  /* ---------- ④ 内置示例法库（节选自公开法源，用于本页离线演示） ---------- */
+  var LAWS = [
+    /* —— 日本（e-Gov） —— */
+    { id:"jp522", c:"日本", law:"民法", cn:"日本民法", no:522, noLabel:"第522条", domain:"合同", src:"e-Gov",
+      kw:["契約の成立","合同成立","承諾","意思表示","要约承诺"],
+      orig:"契約は、契約の内容を示してした意思表示と、相手方がこれを承諾した意思表示との合致によって成立する。",
+      tr:"合同因一方作出表明合同内容的意思表示、对方作出承诺的意思表示并达成一致而成立。" },
+    { id:"jp415", c:"日本", law:"民法", cn:"日本民法", no:415, noLabel:"第415条", domain:"债权", src:"e-Gov",
+      kw:["損害賠償","債務不履行","履行不能","债务不履行","损害赔偿","逾期履行"],
+      orig:"債務者がその債務の本旨に従った履行をしないとき又は債務の履行が不能であるときは、債権者は、これによって生じた損害の賠償を請求することができる。",
+      tr:"债务人不按债务本旨履行或者债务履行不能时，债权人可以请求赔偿因此产生的损害。" },
+    { id:"jp541", c:"日本", law:"民法", cn:"日本民法", no:541, noLabel:"第541条", domain:"合同", src:"e-Gov",
+      kw:["催告","解除","契約の解除","解除合同","相当の期間"],
+      orig:"当事者の一方がその債務を履行しない場合において、相手方が相当の期間を定めてその履行の催告をし、その期間内に履行がないときは、相手方は、契約の解除をすることができる。",
+      tr:"当事人一方不履行债务时，对方定相当期间催告履行，该期间内仍不履行的，对方可以解除合同。" },
+    { id:"jp420", c:"日本", law:"民法", cn:"日本民法", no:420, noLabel:"第420条", domain:"债权", src:"e-Gov",
+      kw:["損害賠償の予定","违约金","赔偿额预定","酌减"],
+      orig:"当事者は、債務の不履行について損害賠償の額を予定することができる。この場合において、裁判所は、その額が不当に高額であるときは、これを減額することができる。",
+      tr:"当事人可以就债务不履行预定损害赔偿额；此时法院认为该数额不当过高时，可以予以减少。" },
+    { id:"jp404", c:"日本", law:"民法", cn:"日本民法", no:404, noLabel:"第404条", domain:"债权", src:"e-Gov",
+      kw:["法定利率","利息","利率"],
+      orig:"利息を生ずべき債権について別段の意思表示がないときは、その利率は、その利息が生じた最初の時期における法定利率による。",
+      tr:"对应生利息的债权无特别意思表示时，其利率依利息发生最初时期的法定利率确定。" },
+    { id:"jp466", c:"日本", law:"民法", cn:"日本民法", no:466, noLabel:"第466条", domain:"债权", src:"e-Gov",
+      kw:["債権譲渡","债权让与","譲渡性"],
+      orig:"債権は、譲り渡すことができる。ただし、その性質がこれを許さないときは、この限りでない。",
+      tr:"债权可以转让。但其性质不允许转让时，不在此限。" },
+    { id:"jp555", c:"日本", law:"民法", cn:"日本民法", no:555, noLabel:"第555条", domain:"合同", src:"e-Gov",
+      kw:["売買","买卖","代金","財産権の移転"],
+      orig:"売買は、当事者の一方がある財産権を相手方に移転することを約し、相手方がこれに対してその代金を支払うことを約することによって、その効力を生ずる。",
+      tr:"买卖因当事人一方约定将某财产权移转于对方、对方约定为此支付价金而发生效力。" },
+    { id:"jp709", c:"日本", law:"民法", cn:"日本民法", no:709, noLabel:"第709条", domain:"债权", src:"e-Gov",
+      kw:["不法行為","侵权","故意過失","损害赔偿"],
+      orig:"故意又は過失によって他人の権利又は法律上保護される利益を侵害した者は、これによって生じた損害を賠償する責任を負う。",
+      tr:"因故意或过失侵害他人权利或法律上受保护利益的人，负赔偿因此产生损害的责任。" },
+    { id:"jp95", c:"日本", law:"民法", cn:"日本民法", no:95, noLabel:"第95条", domain:"总则", src:"e-Gov",
+      kw:["錯誤","错误","取消","動機の錯誤"],
+      orig:"意思表示は、次に掲げる錯誤に基づくものであって、その錯誤が法律行為の目的及び取引上の社会通念に照らして重要なものであるときは、取り消すことができる。",
+      tr:"意思表示基于下列错误，且该错误依法律行为的目的及交易上的社会通念属重要时，可以撤销。" },
+    { id:"jp-shoho522", c:"日本", law:"商法", cn:"日本商法", no:522, noLabel:"第522条", domain:"合同", src:"e-Gov",
+      kw:["買主の検査","检查通知义务","商人間売買","瑕疵"],
+      orig:"商人間の売買において、買主は、その売買の目的物を受領したときは、遅滞なく、その物を検査しなければならない。",
+      tr:"商人之间的买卖中，买受人受领买卖标的物时，应当不迟延地检查该物。" },
+    { id:"jp-shoho524", c:"日本", law:"商法", cn:"日本商法", no:524, noLabel:"第524条", domain:"合同", src:"e-Gov",
+      kw:["保管","供託","拒絶","受領拒絶"],
+      orig:"商人間の売買において、買主がその目的物の受領を拒絶したときは、買主は、その物を保管し又は供託しなければならない。",
+      tr:"商人之间的买卖中，买受人拒绝受领标的物时，应当保管或提存该物。" },
+    { id:"jp-shoho591", c:"日本", law:"商法", cn:"日本商法", no:591, noLabel:"第591条", domain:"公司", src:"e-Gov",
+      kw:["匿名組合","出资","利益分配","出資"],
+      orig:"匿名組合契約は、当事者の一方が相手方の営業のために出資をし、その営業から生ずる利益を分配することを約することによって、その効力を生ずる。",
+      tr:"匿名组合合同因当事人一方约定为对方的营业出资、并分配由该营业产生的利益而发生效力。" },
+    { id:"jp-kaisha105", c:"日本", law:"会社法", cn:"日本会社法", no:105, noLabel:"第105条", domain:"公司", src:"e-Gov",
+      kw:["株主の権利","股东权利","取締役会","董事会","剰余金の配当","出资"],
+      orig:"株主は、その有する株式につき、次に掲げる権利その他これを有する者としての地位に基づく権利を有する。一 剰余金の配当を受ける権利 二 残余財産の分配を受ける権利",
+      tr:"股东就其持有的股份，享有下列权利以及基于其股东地位的其他权利：一、受领盈余金分配的权利；二、受领剩余财产分配的权利。" },
+    { id:"jp-minji3-2", c:"日本", law:"民事訴訟法", cn:"日本民事訴訟法", no:"3の2", noLabel:"第3条の2", domain:"程序", src:"e-Gov",
+      kw:["国際裁判管轄","管辖","住所","涉外","営業所"],
+      orig:"訴えは、日本国内に被告の住所、居所、営業所又は事務所（以下この条において「住所等」という。）があるときは、日本の裁判所に提起することができる。",
+      tr:"被告在日本国内有住所、居所、营业所或事务所（本条下称“住所等”）时，可以向日本法院提起诉讼。" },
+    { id:"jp-roudou20", c:"日本", law:"労働基準法", cn:"日本劳动基准法", no:20, noLabel:"第20条", domain:"劳动", src:"e-Gov",
+      kw:["解雇","予告","平均賃金","劳动","预告"],
+      orig:"使用者は、労働者を解雇しようとする場合においては、少なくとも三十日前にその予告をしなければならない。三十日前に予告をしない使用者は、三十日分以上の平均賃金を支払わなければならない。",
+      tr:"使用者拟解雇劳动者时，应当至少提前三十日预告；未提前三十日预告的，应当支付不少于三十日份额的平均工资。" },
+
+    /* —— 中国（民法典 / 民事诉讼法公开文本） —— */
+    { id:"cn143", c:"中国", law:"民法典", cn:"中华人民共和国民法典", no:143, noLabel:"第一百四十三条", domain:"总则", src:"民法典公开文本",
+      kw:["民事法律行为","有效","意思表示真实","行为能力","公序良俗"],
+      orig:"具备下列条件的民事法律行为有效：（一）行为人具有相应的民事行为能力；（二）意思表示真实；（三）不违反法律、行政法规的强制性规定，不违背公序良俗。",
+      tr:"A juristic act is valid if: (1) the actor has the corresponding capacity; (2) the expression of intent is genuine; (3) it does not violate mandatory provisions of law or administrative regulations, nor offend public order and good morals." },
+    { id:"cn465", c:"中国", law:"民法典", cn:"中华人民共和国民法典", no:465, noLabel:"第四百六十五条", domain:"合同", src:"民法典公开文本",
+      kw:["合同成立","法律保护","约束力","相对性"],
+      orig:"依法成立的合同，受法律保护。依法成立的合同，仅对当事人具有法律约束力，但是法律另有规定的除外。",
+      tr:"A contract formed in accordance with law is protected by law. Such a contract is legally binding only on the parties, unless otherwise provided by law." },
+    { id:"cn502", c:"中国", law:"民法典", cn:"中华人民共和国民法典", no:502, noLabel:"第五百零二条", domain:"合同", src:"民法典公开文本",
+      kw:["合同生效","批准手续","成立时生效","报批义务"],
+      orig:"依法成立的合同，自成立时生效，但是法律另有规定或者当事人另有约定的除外。依照法律、行政法规的规定，合同应当办理批准等手续的，依照其规定。",
+      tr:"A contract formed in accordance with law takes effect upon formation, unless otherwise provided by law or agreed by the parties. Where approval formalities are required by law or administrative regulations, those provisions apply." },
+    { id:"cn509", c:"中国", law:"民法典", cn:"中华人民共和国民法典", no:509, noLabel:"第五百零九条", domain:"合同", src:"民法典公开文本",
+      kw:["全面履行","诚信原则","通知","协助","保密","附随义务"],
+      orig:"当事人应当按照约定全面履行自己的义务。当事人应当遵循诚信原则，根据合同的性质、目的和交易习惯履行通知、协助、保密等义务。",
+      tr:"The parties shall fully perform their obligations as agreed, and shall, in accordance with the principle of good faith and in light of the nature, purpose and trade usage of the contract, perform duties of notice, assistance and confidentiality." },
+    { id:"cn533", c:"中国", law:"民法典", cn:"中华人民共和国民法典", no:533, noLabel:"第五百三十三条", domain:"合同", src:"民法典公开文本",
+      kw:["名称变更","法定代表人变动","不履行合同义务"],
+      orig:"合同生效后，当事人不得因姓名、名称的变更或者法定代表人、负责人、承办人的变动而不履行合同义务。",
+      tr:"After a contract takes effect, a party may not refuse to perform its obligations on the ground of a change of its name, or of its legal representative, responsible person or agent." },
+    { id:"cn563", c:"中国", law:"民法典", cn:"中华人民共和国民法典", no:563, noLabel:"第五百六十三条", domain:"合同", src:"民法典公开文本",
+      kw:["解除合同","催告","不可抗力","迟延履行","合同目的","法定解除"],
+      orig:"有下列情形之一的，当事人可以解除合同：（一）因不可抗力致使不能实现合同目的；（二）在履行期限届满前，当事人一方明确表示或者以自己的行为表明不履行主要债务；（三）当事人一方迟延履行主要债务，经催告后在合理期限内仍未履行；（四）当事人一方迟延履行债务或者有其他违约行为致使不能实现合同目的。",
+      tr:"A party may rescind the contract where: (1) force majeure frustrates the purpose of the contract; (2) before the performance period expires, one party expressly states or shows by its conduct that it will not perform its main obligation; (3) one party delays performance of its main obligation and still fails to perform within a reasonable period after demand; (4) the delay or other breach frustrates the purpose of the contract." },
+    { id:"cn577", c:"中国", law:"民法典", cn:"中华人民共和国民法典", no:577, noLabel:"第五百七十七条", domain:"合同", src:"民法典公开文本",
+      kw:["违约责任","赔偿损失","继续履行","采取补救措施","逾期"],
+      orig:"当事人一方不履行合同义务或者履行合同义务不符合约定的，应当承担继续履行、采取补救措施或者赔偿损失等违约责任。",
+      tr:"Where a party fails to perform its contractual obligations or performs them not in conformity with the agreement, it shall bear liability for breach such as continuing performance, taking remedial measures, or compensating for losses." },
+    { id:"cn585", c:"中国", law:"民法典", cn:"中华人民共和国民法典", no:585, noLabel:"第五百八十五条", domain:"合同", src:"民法典公开文本",
+      kw:["违约金","损失赔偿额","酌增","酌减"],
+      orig:"当事人可以约定一方违约时应当根据违约情况向对方支付一定数额的违约金，也可以约定因违约产生的损失赔偿额的计算方法。约定的违约金低于造成的损失的，人民法院或者仲裁机构可以根据当事人的请求予以增加；约定的违约金过分高于造成的损失的，可以根据当事人的请求予以适当减少。",
+      tr:"The parties may agree on a liquidated sum payable upon breach, or on a method of calculating damages. If the agreed sum is lower than the loss caused, a court or arbitral institution may increase it upon request; if it is excessively higher than the loss, it may be appropriately reduced upon request." },
+    { id:"cn590", c:"中国", law:"民法典", cn:"中华人民共和国民法典", no:590, noLabel:"第五百九十条", domain:"合同", src:"民法典公开文本",
+      kw:["不可抗力","免除责任","通知","证明","部分免除"],
+      orig:"当事人一方因不可抗力不能履行合同的，根据不可抗力的影响，部分或者全部免除责任，但是法律另有规定的除外。因不可抗力不能履行合同的，应当及时通知对方，以减轻可能给对方造成的损失，并应当在合理期限内提供证明。",
+      tr:"A party prevented from performing by force majeure is exempted from liability in whole or in part according to the impact of the force majeure, unless otherwise provided by law. It shall promptly notify the other party to mitigate losses and provide proof within a reasonable period." },
+    { id:"cn67", c:"中国", law:"民事诉讼法", cn:"中华人民共和国民事诉讼法", no:67, noLabel:"第六十七条", domain:"程序", src:"民诉法公开文本",
+      kw:["举证责任","提供证据","调查收集","证明"],
+      orig:"当事人对自己提出的主张，有责任提供证据。当事人及其诉讼代理人因客观原因不能自行收集的证据，或者人民法院认为审理案件需要的证据，人民法院应当调查收集。",
+      tr:"A party has the burden of adducing evidence for the assertions it makes. Evidence that a party or its agent cannot collect for objective reasons, or that the court considers necessary for trial, shall be collected by the court." },
+
+    /* —— 美国（govinfo / 官方中译） —— */
+    { id:"us1125", c:"美国", law:"Title 15", cn:"美国法典 Title 15", no:"1125", noLabel:"§ 1125", domain:"商标", src:"govinfo",
+      kw:["trademark","confusion","false designation","商标","混淆","虚假标示"],
+      orig:"Any person who, on or in connection with any goods or services, uses in commerce any word, term, name, symbol, or device, or any combination thereof, or any false designation of origin, false or misleading description of fact, which is likely to cause confusion, or to cause mistake, or to deceive as to the affiliation, connection, or association of such person with another person, shall be liable in a civil action by any person who believes that he or she is or is likely to be damaged by such act.",
+      tr:"任何人在商业中，就任何商品或服务使用任何词语、名称、符号、装置或其组合，或使用虚假来源标示、虚假或引人误解的事实描述，可能引起混淆、误认，或使人对与他人的隶属、联系或关联产生误解的，任何认为其已经或可能因此受损的人可以提起民事诉讼追究其责任。" },
+    { id:"us1114", c:"美国", law:"Title 15", cn:"美国法典 Title 15", no:"1114", noLabel:"§ 1114", domain:"商标", src:"govinfo",
+      kw:["registered mark","infringement","商标侵权","注册标记"],
+      orig:"Any person who shall, without the consent of the registrant, use in commerce any reproduction, counterfeit, copy, or colorable imitation of a registered mark in connection with the sale, offering for sale, distribution, or advertising of any goods or services, which use is likely to cause confusion, or to cause mistake, or to deceive, shall be liable in a civil action by the registrant.",
+      tr:"任何人未经注册人同意，在商业中于任何商品或服务的销售、许诺销售、分销或广告中使用注册商标的复制品、仿冒品、复制件或近似仿制品，且该使用可能引起混淆、误认或欺骗的，注册人可以提起民事诉讼追究其责任。" },
+    { id:"us106", c:"美国", law:"Title 17", cn:"美国法典 Title 17", no:"106", noLabel:"§ 106", domain:"版权", src:"govinfo",
+      kw:["copyright","exclusive rights","reproduce","derivative","版权","专有权利"],
+      orig:"Subject to sections 107 through 122, the owner of copyright under this title has the exclusive rights to do and to authorize any of the following: (1) to reproduce the copyrighted work in copies or phonorecords; (2) to prepare derivative works based upon the copyrighted work; (3) to distribute copies or phonorecords to the public by sale or other transfer of ownership, or by rental, lease, or lending.",
+      tr:"除第 107 条至第 122 条另有规定外，本编项下版权人享有从事及授权他人从事下列行为的专有权利：（1）以复制件或录音制品形式复制版权作品；（2）基于版权作品创作演绎作品；（3）通过出售或其他所有权移转方式，或通过出租、租赁、出借方式向公众发行复制件或录音制品。" },
+    { id:"us101", c:"美国", law:"Title 35", cn:"美国法典 Title 35", no:"101", noLabel:"§ 101", domain:"专利", src:"govinfo",
+      kw:["patent","process","machine","composition of matter","专利","可专利性"],
+      orig:"Whoever invents or discovers any new and useful process, machine, manufacture, or composition of matter, or any new and useful improvement thereof, may obtain a patent therefor, subject to the conditions and requirements of this title.",
+      tr:"任何人发明或发现任何新颖且实用的方法、机器、制品或物质组合，或其任何新颖且实用的改进，在符合本编条件与要求的前提下，可以就其取得专利。" },
+    { id:"us78j", c:"美国", law:"Title 15", cn:"美国法典 Title 15", no:"78j", noLabel:"§ 78j(b)", domain:"证券", src:"govinfo",
+      kw:["securities fraud","manipulative","deceptive device","证券欺诈","操纵"],
+      orig:"It shall be unlawful for any person, directly or indirectly, by the use of any means or instrumentality of interstate commerce, to use or employ, in connection with the purchase or sale of any security, any manipulative or deceptive device or contrivance in contravention of such rules and regulations as the Commission may prescribe as necessary or appropriate in the public interest or for the protection of investors.",
+      tr:"任何人直接或间接利用州际 commerce 的任何手段或工具，在买卖任何证券时使用或实施违反委员会为公共利益或保护投资者而制定的规则与规章的操纵性或欺诈性装置或手段，均属违法。" },
+    { id:"us-amend5", c:"美国", law:"宪法第五修正案", cn:"美国宪法第五修正案", no:5, noLabel:"第五修正案", domain:"宪法", src:"constitutioncenter.org 官方中译",
+      kw:["due process","self-incrimination","正当法律程序","自证其罪","大陪审团","征收"],
+      orig:"No person shall be held to answer for a capital, or otherwise infamous crime, unless on a presentment or indictment of a Grand Jury; nor shall any person be subject for the same offence to be twice put in jeopardy of life or limb; nor shall be compelled in any criminal case to be a witness against himself; nor be deprived of life, liberty, or property, without due process of law; nor shall private property be taken for public use, without just compensation.",
+      tr:"任何人，非经大陪审团提起公诉，不得被判死刑或其他不名誉罪；任何人不得因同一犯罪行为而两次遭受生命或身体的危害；不得在任何刑事案件中被迫自证其罪；非经正当法律程序，不得被剥夺生命、自由或财产；非经公平赔偿，私有财产不得充作公用。" }
+  ];
+
+  var LIB = {}, NOFORMS = {};
+  function normCite(s) {
+    return String(s == null ? "" : s).replace(/[\s《》〈〉«»·,，、。；;：:（）()\[\]"'“”‘’]/g, "").toLowerCase();
+  }
+  function aliasesOf(l) {
+    var forms = [l.cn, l.law, l.c + l.law, String(l.cn).replace(/^中华人民共和国/, "")];
+    var nos = [l.noLabel, "第" + l.no + "条", "§ " + l.no, "§" + l.no];
+    var out = [];
+    forms.forEach(function (f) { nos.forEach(function (n) { out.push(normCite(f + n)); }); });
+    if (l.aliases) l.aliases.forEach(function (a) { out.push(normCite(a)); });
+    return out;
+  }
+  LAWS.forEach(function (l) {
+    LIB[l.id] = l;
+    l._alias = aliasesOf(l);
+  });
+
+  /* ---------- 条号三种写法：阿拉伯 / 中文 / 罗马 ---------- */
+  var CN_D = "零一二三四五六七八九", CN_U = ["", "十", "百", "千"];
+  function cnNum(n) {
+    if (n === "" || n == null || isNaN(n)) return String(n);
+    n = parseInt(n, 10);
+    if (n === 0) return "零";
+    if (String(n).length > 4) return String(n);
+    var s = "", zero = false, str = String(n).split("").reverse();
+    for (var i = str.length - 1; i >= 0; i--) {
+      var d = +str[i];
+      if (d === 0) { zero = true; continue; }
+      if (zero && s) s += "零";
+      zero = false;
+      s += CN_D[d] + CN_U[i];
+    }
+    if (/^一十/.test(s)) s = s.slice(1);      // 15 → 十五，但 415 → 四百一十五
+    return s;
+  }
+  function cnParse(s) {
+    var m = { "零": 0, "一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9 };
+    var u = { "十": 10, "百": 100, "千": 1000 };
+    var total = 0, cur = 0, hit = false;
+    for (var i = 0; i < s.length; i++) {
+      var ch = s.charAt(i);
+      if (m[ch] !== undefined) { cur = m[ch]; hit = true; }
+      else if (u[ch]) { total += (cur || 1) * u[ch]; cur = 0; hit = true; }
+    }
+    return hit ? total + cur : NaN;
+  }
+  var ROMAN = [[1000, "M"], [900, "CM"], [500, "D"], [400, "CD"], [100, "C"], [90, "XC"], [50, "L"], [40, "XL"], [10, "X"], [9, "IX"], [5, "V"], [4, "IV"], [1, "I"]];
+  function roman(n) {
+    n = parseInt(n, 10);
+    if (!n || n < 1 || n > 3999) return "";
+    var out = "";
+    ROMAN.forEach(function (p) { while (n >= p[0]) { out += p[1]; n -= p[0]; } });
+    return out;
+  }
+  function romanParse(s) {
+    s = String(s).toUpperCase();
+    if (!/^[IVXLCDM]+$/.test(s)) return NaN;
+    var v = { I: 1, V: 5, X: 10, L: 50, C: 100, D: 500, M: 1000 }, t = 0;
+    for (var i = 0; i < s.length; i++) {
+      var cur = v[s.charAt(i)], nx = v[s.charAt(i + 1)] || 0;
+      t += cur < nx ? -cur : cur;
+    }
+    return t;
+  }
+  /* 把任意写法解析成条号数字：415 / 第四百一十五条 / CDXV / §1125 */
+  function parseNo(input) {
+    var s = String(input || "").trim().replace(/[\s第条§.]/g, "");
+    if (!s) return NaN;
+    if (/^\d+$/.test(s)) return parseInt(s, 10);
+    if (/^[零一二三四五六七八九十百千]+$/.test(s)) return cnParse(s);
+    if (/^[IVXLCDMivxlcdm]+$/.test(s)) return romanParse(s);
+    return NaN;
+  }
+
+  /* 条号中文写法索引（必须在 cnNum 定义之后调用） */
+  LAWS.forEach(function (l) { NOFORMS[l.id] = cnNum(l.no); });
+
+  /* ---------- 引用解析：把交付物里的引用文本对回本地库 ---------- */  function resolveCite(text) {
+    var t = normCite(text), hit = null;
+    LAWS.forEach(function (l) {
+      if (hit) return;
+      for (var i = 0; i < l._alias.length; i++) {
+        if (t.indexOf(l._alias[i]) >= 0) { hit = l; return; }
+      }
+    });
+    return hit;
+  }
+  function citeIndex(l) { return l.cn + " " + l.noLabel; }
+
+  /* ---------- 检索 / 高亮 ---------- */
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+  function escRe(s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+  function hl(text, terms) {
+    var out = esc(text);
+    terms.forEach(function (t) {
+      if (!t) return;
+      out = out.replace(new RegExp("(" + escRe(esc(t)) + ")", "gi"), "<mark>$1</mark>");
+    });
+    return out;
+  }
+  function terms(q) { return String(q || "").toLowerCase().split(/\s+/).filter(Boolean); }
+  function hayOf(l) {
+    return [l.law, l.cn, l.c, l.noLabel, l.cno || "", l.domain, l.orig, l.tr, l.kw.join(" ")].join(" ").toLowerCase();
+  }
+  function searchLaws(q, opt) {
+    opt = opt || {};
+    var ts = terms(q), res = [];
+    LAWS.forEach(function (l) {
+      if (opt.country && l.c !== opt.country) return;
+      if (opt.domain && l.domain !== opt.domain) return;
+      var hay = hayOf(l), score = 0;
+      if (!ts.length) score = 1;
+      for (var i = 0; i < ts.length; i++) {
+        var t = ts[i];
+        if (hay.indexOf(t) < 0) return;                       // 全部词都要命中
+        score += Math.min(hay.split(t).length - 1, 6);
+        if ((l.cn + l.law).toLowerCase().indexOf(t) >= 0) score += 3;
+        if ((l.noLabel + " " + (l.cno || "")).toLowerCase().indexOf(t) >= 0) score += 6;
+        if (l.kw.join(" ").toLowerCase().indexOf(t) >= 0) score += 2;
+      }
+      res.push({ law: l, score: score });
+    });
+    res.sort(function (a, b) { return b.score - a.score || ("" + a.law.no).localeCompare("" + b.law.no); });
+    return res;
+  }
+  /* 关联查找：按关键词字段给条文打分（悬浮球用） */
+  function linkLaws(text, limit) {
+    var s = String(text || ""), hits = [];
+    LAWS.forEach(function (l) {
+      var sc = 0;
+      l.kw.forEach(function (k) { if (s.indexOf(k) >= 0) sc += k.length; });
+      if (sc > 0) hits.push({ law: l, score: sc });
+    });
+    hits.sort(function (a, b) { return b.score - a.score; });
+    return hits.slice(0, limit || 3);
+  }
+  function snippet(l, ts) {
+    var src = l.orig, idx = -1;
+    for (var i = 0; i < ts.length && idx < 0; i++) idx = src.toLowerCase().indexOf(ts[i]);
+    if (idx < 0) idx = 0;
+    var from = Math.max(0, idx - 26);
+    return (from > 0 ? "…" : "") + src.slice(from, from + 86) + (from + 86 < src.length ? "…" : "");
+  }
+
+  /* ---------- 通用：复制 / 下载 / toast 文案 ---------- */
+  function copyText(text, done, fail) {
+    var settled = false;
+    function ok() { if (!settled) { settled = true; done(); } }
+    function no() { if (!settled) { settled = true; fail(); } }
+    function fallback() {
+      if (settled) return;
+      try {
+        var ta = document.createElement("textarea");
+        ta.value = text; ta.setAttribute("readonly", "readonly");
+        ta.style.cssText = "position:fixed;left:-9999px;top:0";
+        document.body.appendChild(ta); ta.select();
+        var okCopy = document.execCommand("copy");
+        document.body.removeChild(ta);
+        okCopy ? ok() : no();
+      } catch (e) { no(); }
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      try {
+        navigator.clipboard.writeText(text).then(ok, fallback);
+        // 兜底：离线双击打开 / 无权限弹窗时 promise 可能长时间不落地，不能让按钮看起来没反应
+        setTimeout(fallback, 380);
+        return;
+      } catch (e) { /* 落到 execCommand 方案 */ }
+    }
+    fallback();
+  }
+  function downloadFile(name, mime, text) {
+    try {
+      var blob = new Blob(["\ufeff" + text], { type: mime + ";charset=utf-8" });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url; a.download = name; a.rel = "noopener";
+      document.body.appendChild(a); a.click();
+      setTimeout(function () { document.body.removeChild(a); URL.revokeObjectURL(url); }, 400);
+      return blob.size;
+    } catch (e) { return 0; }
+  }
+  function bytesOf(text) {
+    try { return new Blob([text]).size; } catch (e) { return String(text).length * 2; }
+  }
+  function kb(n) { return n >= 1024 ? (n / 1024).toFixed(1) + " KB" : n + " B"; }
+  function wordHtml(title, bodyHtml) {
+    return '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word">' +
+      '<head><meta charset="utf-8"><title>' + esc(title) + '</title>' +
+      '<style>@page{size:A4;margin:2.2cm 2.4cm}body{font-family:"SimSun","Songti SC",serif;font-size:12pt;line-height:1.75;color:#111}' +
+      'h1{font-size:16pt;text-align:center;font-family:"SimHei",sans-serif;margin:0 0 14pt}' +
+      'h2{font-size:13pt;font-family:"SimHei",sans-serif;margin:14pt 0 6pt}' +
+      'p{margin:0 0 8pt;text-align:justify}table{border-collapse:collapse;width:100%;margin:8pt 0}' +
+      'th,td{border:1px solid #888;padding:4pt 6pt;font-size:10.5pt}th{background:#f2f2f2}' +
+      '.cite{font-weight:600}.hint-inline,.empty{color:#666;font-size:9.5pt}</style></head><body>' +
+      '<h1>' + esc(title) + '</h1>' + bodyHtml + '</body></html>';
+  }
+
+  /* ============================================================
+     全局演示 API（同时供自测脚本 / 页面内部互相调用）
+     ============================================================ */
+  var FaronDemo = {};
+  window.FaronDemo = FaronDemo;
+
+  /* ============================================================
+     ⑤ 法规检索工作台（关键词检索 / 按法浏览 / 条号三写法跳转）
+     ============================================================ */
+  var SW = { q: "", country: "", domain: "", mode: "kw", hits: [], cur: null, picked: null };
+  var swEls = {};
+  ["swInput", "swGo", "swCountry", "swDomain", "swMode", "swKw", "swLaw", "swHits",
+   "swLawList", "swDetail", "swPill", "swCount", "swJump2", "swJump2Go", "swJump2Hint"]
+    .forEach(function (id) { swEls[id] = document.getElementById(id); });
+
+  var printBox = document.getElementById("printBox");
+  if (!printBox) {
+    printBox = document.createElement("div");
+    printBox.id = "printBox";
+    printBox.className = "print-only";
+    document.body.appendChild(printBox);
+  }
+
+  function origLabel(l) { return l.c === "中国" ? "原文（中文）" : (l.c === "日本" ? "原文（日本語）" : "原文（English）"); }
+  function trLabel(l) { return l.c === "中国" ? "英文译文参考" : "中文译文"; }
+  function formsOf(l) {
+    var out = [l.noLabel];
+    var push = function (s) { if (s && out.indexOf(s) < 0) out.push(s); };
+    push("第" + l.no + "条");
+    push("第" + cnNum(l.no) + "条");
+    push(roman(l.no));
+    return out;
+  }
+
+  /* 关键词检索结果 */
+  function swRenderHits() {
+    if (!swEls.swHits) return;
+    var ts = terms(SW.q);
+    SW.hits = searchLaws(SW.q, { country: SW.country, domain: SW.domain });
+    if (!SW.hits.length) {
+      swEls.swHits.innerHTML = '<div class="empty">没有命中。试试「违约金」「損害賠償」「催告」「举证」「confusion」，或清掉国家/领域筛选。</div>';
+    } else {
+      swEls.swHits.innerHTML = SW.hits.slice(0, 12).map(function (r) {
+        var l = r.law;
+        var on = SW.cur && SW.cur.id === l.id ? " on" : "";
+        return '<button class="hit' + on + '" type="button" data-id="' + l.id + '">' +
+          '<span class="h1">' + hl(l.cn + " " + l.noLabel, ts) + '<span class="no">' + (l.c === "美国" ? l.noLabel : "") + '</span></span>' +
+          '<span class="sn">' + hl(snippet(l, ts), ts) + '</span>' +
+          '<span class="meta"><span class="pill">' + l.c + " · " + l.domain + '</span><span class="pill">来源 ' + l.src + '</span>' +
+          '<span class="pill ok">关键词命中 ' + r.score + '</span></span></button>';
+      }).join("");
+    }
+    if (swEls.swCount) {
+      swEls.swCount.textContent = "命中 " + SW.hits.length + " / 示例库 " + LAWS.length + " 条";
+    }
+  }
+
+  /* 按法浏览 */
+  function swRenderLawList() {
+    if (!swEls.swLawList) return;
+    var groups = [];
+    LAWS.forEach(function (l) {
+      if (SW.country && l.c !== SW.country) return;
+      var key = l.c + " · " + l.cn;
+      var g = null;
+      for (var i = 0; i < groups.length; i++) if (groups[i].key === key) g = groups[i];
+      if (!g) { g = { key: key, law: l, items: [] }; groups.push(g); }
+      g.items.push(l);
+    });
+    if (!groups.length) { swEls.swLawList.innerHTML = '<div class="empty">该筛选下暂无示例条目</div>'; return; }
+    swEls.swLawList.innerHTML = groups.map(function (g) {
+      var on = SW.picked && SW.picked.law === g.law.law && SW.picked.c === g.law.c ? " on" : "";
+      return '<div><div class="lt">' + g.key + " · " + g.items.length + " 条（示例）</div>" +
+        '<button class="lawitem' + on + '" type="button" data-law="' + g.law.law + '" data-c="' + g.law.c + '">' +
+        '<span>' + g.law.law + '</span><span class="c">' + g.items.map(function (x) { return x.noLabel; }).join(" · ") + '</span></button></div>';
+    }).join("");
+  }
+
+  /* 条文详情 */
+  function swOpen(id, note) {
+    var l = LIB[id];
+    if (!l || !swEls.swDetail) return;
+    SW.cur = l;
+    SW.picked = { law: l.law, c: l.c };
+    var ts = terms(SW.q);
+    swEls.swDetail.innerHTML =
+      '<div class="detail-head">' +
+        '<span class="law">' + hl(l.cn + " " + l.noLabel, ts) + '</span>' +
+        '<span class="pill">' + l.c + " · " + l.domain + '</span>' +
+        '<span class="pill ok">来源 ' + l.src + '</span>' +
+      '</div>' +
+      '<div class="noforms">' + formsOf(l).map(function (f) { return '<span class="nf">' + esc(f) + '</span>'; }).join("") + '</div>' +
+      '<p class="lbl">' + origLabel(l) + '</p><p class="jp">' + esc(l.orig) + '</p>' +
+      '<p class="lbl">' + trLabel(l) + '</p><p class="zh">' + esc(l.tr) + '</p>' +
+      '<p class="hint-inline">法名：' + esc(l.law) + '（' + esc(l.cn) + '）· 领域 ' + l.domain + ' · 来源 ' + esc(l.src) +
+        ' · 演示库条目 ' + l.id + '（完整库 ' + (152940).toLocaleString("en-US") + ' 条随安装包内置）</p>' +
+      '<div class="jumpbar">' +
+        '<input class="input" id="swJump" type="text" autocomplete="off" placeholder="同法条号跳转：415 / 第四百一十五条 / CDXV" aria-label="同法条号跳转" />' +
+        '<button class="btn btn-sm" id="swJumpGo" type="button">条号跳转</button>' +
+        '<button class="btn btn-sm" id="swCopy" type="button">复制条文</button>' +
+        '<button class="btn btn-sm" id="swPrint" type="button">打印 / 另存 PDF</button>' +
+      '</div>' +
+      '<p class="hint-inline" id="swDetailHint">' + (note || "同一部法内可用阿拉伯数字 / 中文数字 / 罗马数字三种写法跳转。") + '</p>';
+    if (swEls.swPill) { swEls.swPill.textContent = l.c + " · " + l.noLabel; swEls.swPill.className = "pill ok"; }
+    swRenderHits();
+    swRenderLawList();
+  }
+
+  /* 同法条号跳转 */
+  function swJumpTo(input, lawName, country, hintEl) {
+    var n = parseNo(input);
+    if (isNaN(n)) { if (hintEl) hintEl.textContent = "无法识别该写法（支持 415 / 第四百一十五条 / CDXV）"; return null; }
+    var found = null;
+    LAWS.forEach(function (l) {
+      if (l.c === country && l.law === lawName && String(l.no) === String(n)) found = l;
+    });
+    if (!found) {
+      if (hintEl) hintEl.textContent = "本演示库中该法未收录 " + input + "（条号已解析为 " + n + "）——完整库可命中。";
+      return null;
+    }
+    if (hintEl) hintEl.textContent = "已跳转到 " + found.cn + " " + found.noLabel;
+    swOpen(found.id, "已从「" + input + "」解析并跳转到 " + found.cn + " " + found.noLabel);
+    return found;
+  }
+
+  function swPrint(l) {
+    l = l || SW.cur;
+    if (!l) return;
+    printBox.innerHTML =
+      '<h1 style="text-align:center;font-size:19px">' + esc(l.cn + " " + l.noLabel) + '</h1>' +
+      '<p style="color:#666;font-size:12px;text-align:center">来源：' + esc(l.src) + ' · 领域：' + l.domain + ' · 法元 · Faron 演示库</p>' +
+      '<h3 style="margin-top:18px">' + esc(origLabel(l)) + '</h3><p>' + esc(l.orig) + '</p>' +
+      '<h3>' + esc(trLabel(l)) + '</h3><p>' + esc(l.tr) + '</p>' +
+      '<p style="color:#666;font-size:12px;margin-top:20px">本页为产品演示，条文节选自公开法源；完整库 152,940 条随安装包内置。</p>';
+    document.body.classList.add("printing");
+    var cleanup = function () { document.body.classList.remove("printing"); window.removeEventListener("afterprint", cleanup); };
+    window.addEventListener("afterprint", cleanup);
+    try { window.print(); } catch (e) {}
+    setTimeout(cleanup, 1200);
+  }
+
+  function swInit() {
+    if (!swEls.swInput) return;
+    if (swEls.swCount) swEls.swCount.textContent = "示例库 " + LAWS.length + " 条";
+    var doms = [];
+    LAWS.forEach(function (l) { if (doms.indexOf(l.domain) < 0) doms.push(l.domain); });
+    if (swEls.swDomain) {
+      doms.forEach(function (d) {
+        var o = document.createElement("option");
+        o.value = d; o.textContent = d;
+        swEls.swDomain.appendChild(o);
+      });
+    }
+    if (swEls.swGo) swEls.swGo.addEventListener("click", function () { swRenderHits(); });
+    if (swEls.swInput) {
+      swEls.swInput.addEventListener("input", function () { SW.q = swEls.swInput.value; swRenderHits(); });
+      swEls.swInput.addEventListener("keydown", function (e) { if (e.key === "Enter") { SW.q = swEls.swInput.value; swRenderHits(); } });
+    }
+    /* 快捷示例词 */
+    var quick = ["违约金", "損害賠償", "催告", "举证责任", "confusion", "不可抗力"];
+    var qrow = document.createElement("div");
+    qrow.className = "chip-row";
+    qrow.style.marginTop = "10px";
+    qrow.innerHTML = '<span class="hint-inline">试试</span>' + quick.map(function (w) {
+      return '<button class="chip" type="button" data-q="' + w + '">' + w + '</button>';
+    }).join("");
+    qrow.addEventListener("click", function (e) {
+      var b = e.target.closest("[data-q]");
+      if (!b) return;
+      swEls.swInput.value = b.getAttribute("data-q");
+      SW.q = swEls.swInput.value;
+      SW.mode = "kw"; swSetMode("kw");
+      swRenderHits();
+    });
+    swEls.swInput.parentNode.parentNode.insertBefore(qrow, swEls.swInput.parentNode.nextSibling);
+
+    if (swEls.swCountry) {
+      swEls.swCountry.addEventListener("click", function (e) {
+        var b = e.target.closest("[data-country]");
+        if (!b) return;
+        SW.country = b.getAttribute("data-country");
+        [].slice.call(swEls.swCountry.querySelectorAll("[data-country]")).forEach(function (x) {
+          x.setAttribute("aria-pressed", x === b ? "true" : "false");
+        });
+        swRenderHits(); swRenderLawList();
+      });
+    }
+    if (swEls.swDomain) {
+      swEls.swDomain.addEventListener("change", function () { SW.domain = swEls.swDomain.value; swRenderHits(); });
+    }
+    if (swEls.swMode) {
+      swEls.swMode.addEventListener("click", function (e) {
+        var b = e.target.closest("[data-mode]");
+        if (b) swSetMode(b.getAttribute("data-mode"));
+      });
+    }
+    if (swEls.swLawList) {
+      swEls.swLawList.addEventListener("click", function (e) {
+        var b = e.target.closest("[data-law]");
+        if (!b) return;
+        var law = b.getAttribute("data-law"), c = b.getAttribute("data-c");
+        var first = null;
+        LAWS.forEach(function (l) { if (!first && l.law === law && l.c === c) first = l; });
+        if (first) swOpen(first.id, "已切换到《" + first.cn + "》，共 " + LAWS.filter(function (l) { return l.law === law && l.c === c; }).length + " 条示例；可在下方按条号跳转。");
+      });
+    }
+    if (swEls.swHits) {
+      swEls.swHits.addEventListener("click", function (e) {
+        var b = e.target.closest("[data-id]");
+        if (b) swOpen(b.getAttribute("data-id"));
+      });
+    }
+    if (swEls.swDetail) {
+      swEls.swDetail.addEventListener("click", function (e) {
+        var t = e.target;
+        if (t.id === "swCopy") {
+          var l = SW.cur; if (!l) return;
+          copyText(l.cn + " " + l.noLabel + "\n" + l.orig + "\n" + l.tr + "\n（来源：" + l.src + "）",
+            function () { swEls.swDetail.querySelector("#swDetailHint").textContent = "已复制条文与译文到剪贴板"; },
+            function () { swEls.swDetail.querySelector("#swDetailHint").textContent = "当前环境不允许自动复制，请手动选中文本复制"; });
+        } else if (t.id === "swPrint") {
+          swPrint(SW.cur);
+        } else if (t.id === "swJumpGo") {
+          var l2 = SW.cur; if (!l2) return;
+          swJumpTo(swEls.swDetail.querySelector("#swJump").value, l2.law, l2.c, swEls.swDetail.querySelector("#swDetailHint"));
+        }
+      });
+    }
+    if (swEls.swJump2Go) {
+      swEls.swJump2Go.addEventListener("click", function () {
+        if (!SW.picked) { swEls.swJump2Hint.textContent = "先在下面选一部法"; return; }
+        swJumpTo(swEls.swJump2.value, SW.picked.law, SW.picked.c, swEls.swJump2Hint);
+      });
+      swEls.swJump2.addEventListener("keydown", function (e) { if (e.key === "Enter") swEls.swJump2Go.click(); });
+    }
+    swRenderHits();
+    swRenderLawList();
+  }
+
+  function swSetMode(m) {
+    SW.mode = m;
+    if (swEls.swMode) {
+      [].slice.call(swEls.swMode.querySelectorAll("[data-mode]")).forEach(function (b) {
+        b.classList.toggle("on", b.getAttribute("data-mode") === m);
+      });
+    }
+    if (swEls.swKw) swEls.swKw.style.display = m === "kw" ? "" : "none";
+    if (swEls.swLaw) swEls.swLaw.style.display = m === "law" ? "" : "none";
+  }
+
+  swInit();
+
+  /* ---------- 产品实况 · 法规查询面板的三个按钮：驱动上面的检索台 ---------- */
+  function gotoWorkbench(lawId, act) {
+    var sec = document.getElementById("search");
+    if (sec) { try { sec.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" }); } catch (e) { sec.scrollIntoView(); } }
+    if (lawId) swOpen(lawId, act === "print" ? "已按「打印 / 另存 PDF」打开该条条文" : "已按「跳到」定位到该条条文");
+    setTimeout(function () {
+      if (act === "print") swPrint(LIB[lawId]);
+      if (act === "copy") {
+        var l = LIB[lawId];
+        copyText(l.cn + " " + l.noLabel + "\n" + l.orig + "\n" + l.tr,
+          function () { if (swEls.swPill) { swEls.swPill.textContent = "条文已复制 ✓"; } },
+          function () { if (swEls.swPill) { swEls.swPill.textContent = "请手动复制条文"; } });
+      }
+    }, reduce ? 0 : 420);
+  }
+  var lawsPrint = document.getElementById("lawsPrint"),
+      lawsCopy = document.getElementById("lawsCopy"),
+      lawsJump = document.getElementById("lawsJump");
+  if (lawsPrint) lawsPrint.addEventListener("click", function () { gotoWorkbench("jp415", "print"); });
+  if (lawsCopy) lawsCopy.addEventListener("click", function () { gotoWorkbench("jp415", "copy"); });
+  if (lawsJump) lawsJump.addEventListener("click", function () { gotoWorkbench("jp541", "jump"); });
+
+  /* ---------- 产品实况 · 翻译面板：真的能导出 ---------- */
+  var TRANS_PARTS = [
+    "本公司と日本企業との間で締結した合弁事業契約は、出資比率及び資本検証の手続を定め、出資の期限を二〇二六年三月三十一日とする。",
+    "日本側は出資を期限どおり履行せず、取締役会の招集にも応じない。",
+    "二度の書面による催告後もなお履行しないため、契約の解除及び損害賠償を請求する。",
+    "なお、不可抗力の主張については、相手方の内部事情は不可抗力に該当しないものと解する。"
+  ];
+  var TRANS_OUT = TRANS_PARTS.join(" ");
+  var transRun = document.getElementById("transRun"),
+      transWord = document.getElementById("transWord"),
+      transPick = document.getElementById("transPick"),
+      transHint = document.getElementById("transHint");
+  if (transRun) {
+    transRun.addEventListener("click", function () {
+      var box = document.querySelector("#p-translate .area.out");
+      if (!box) return;
+      var parts = TRANS_PARTS, i = 0;
+      box.textContent = "";
+      if (transHint) transHint.textContent = "翻译中… 0/" + parts.length + " 段";
+      var tick = function () {
+        if (i >= parts.length) {
+          if (transHint) transHint.textContent = "已译 " + parts.length + "/" + parts.length + " 段 · 术语跨段一致 ✓";
+          return;
+        }
+        box.textContent += (i ? " " : "") + parts[i];
+        i++;
+        if (transHint) transHint.textContent = "翻译中… " + i + "/" + parts.length + " 段";
+        setTimeout(tick, reduce ? 0 : 240);
+      };
+      tick();
+    });
+  }
+  if (transWord) {
+    transWord.addEventListener("click", function () {
+      var bodyHtml = '<p>' + esc(TRANS_OUT) + '</p>' +
+        '<h2>术语对照</h2><table><tr><th>中文</th><th>日文</th></tr>' +
+        '<tr><td>出资比例</td><td>出資比率</td></tr><tr><td>验资程序</td><td>資本検証の手続</td></tr>' +
+        '<tr><td>解除合同</td><td>契約の解除</td></tr><tr><td>损害赔偿</td><td>損害賠償</td></tr></table>' +
+        '<p class="hint-inline">由法元 · Faron 演示页导出；真实产品导出 .docx 并记入「最近文书」。</p>';
+      downloadFile("合资合同-日文译文-Faron.doc", "application/msword", wordHtml("合资经营合同 · 日文全文翻译", bodyHtml));
+      if (transHint) transHint.textContent = "已导出 Word（.doc）· 真实产品为 .docx 并记入最近文书 ✓";
+    });
+  }
+  if (transPick) {
+    transPick.addEventListener("click", function () {
+      if (transHint) transHint.textContent = "演示环境不读取本地文件；真实产品支持 DOCX / PPTX / XLSX / TXT / MD / CSV 本地提取";
+    });
+  }
+
+  FaronDemo.laws = LAWS;
+  FaronDemo.searchLaws = searchLaws;
+  FaronDemo.linkLaws = linkLaws;
+  FaronDemo.resolveCite = resolveCite;
+  FaronDemo.openLaw = swOpen;
+  FaronDemo.gotoWorkbench = gotoWorkbench;
+  FaronDemo.printLaw = swPrint;
+  FaronDemo.exportWord = function (name, title, bodyHtml) { return downloadFile(name, "application/msword", wordHtml(title, bodyHtml)); };
+  FaronDemo.swSetMode = swSetMode;
+  FaronDemo.resetWorkbench = function (q) {
+    if (swEls.swInput) swEls.swInput.value = q || "";
+    SW.q = q || "";
+    SW.country = ""; SW.domain = "";
+    if (swEls.swDomain) swEls.swDomain.value = "";
+    if (swEls.swCountry) {
+      [].slice.call(swEls.swCountry.querySelectorAll("[data-country]")).forEach(function (x) {
+        x.setAttribute("aria-pressed", x.getAttribute("data-country") === "" ? "true" : "false");
+      });
+    }
+    swSetMode("kw");
+    swRenderHits();
+  };
+
+  /* ============================================================
+     ⑥ 智能体演练：执行 / 暂停 / 单步 / 人工确认闸门 / 质检阻断 / 导出
+     ============================================================ */
+  var PLANS = {
+    review: {
+      name: "涉外合资经营合同审查意见",
+      caseName: "案由：涉外合资经营合同纠纷 · 图谱骨架已注入",
+      scope: ["中华人民共和国民法典", "日本民法", "日本商法", "日本会社法", "日本民事訴訟法"],
+      steps: [
+        { t: "检索争议解决与违约条款依据", tool: "laws_search",
+          logs: [["tool", "laws_search(keyword=违约金, country=中国) → 命中 3 条"],
+                 ["tool", "laws_search(keyword=損害賠償, country=日本) → 命中 4 条"]] },
+        { t: "载入案由图谱骨架", tool: "graph_query",
+          logs: [["tool", "graph_query(案由=涉外合资经营合同纠纷) → 要件 4 · 请求权基础 3 · 证据 2"]] },
+        { t: "载入「合同」类模板骨架", tool: "template_load",
+          logs: [["tool", "template_load(category=合同) → 已载入 3 段骨架（风险 / 责任 / 建议）"]] },
+        { t: "起草审查意见（逐条风险 + 修改建议）", tool: "reason",
+          logs: [["reason", "reason(draft) → 生成 4 段意见，引用 6 处法条"]],
+          chunks: ["<h4>涉外合资经营合同审查意见</h4>",
+            '<p><b>一、审查范围</b>：己方与日本公司间《合资经营合同》第 3、5、7、9 条，覆盖出资、董事会、违约责任与争议解决条款。</p>',
+            '<p><b>二、合同效力</b>：本合同经双方签署即成立并生效，见<span class="cite" data-key="cn502">《中华人民共和国民法典》第五百零二条</span>；日方内部审批未完成不影响其对外效力，但建议增设「审批完成」为出资先决条件，并依<span class="cite" data-key="jp522">日本民法第 522 条</span>确认双方意思表示一致的范围。</p>',
+            '<p><b>三、违约与解除</b>：日方逾期未出资构成债务不履行，可依<span class="cite" data-key="jp415">日本民法第 415 条</span>请求损害赔偿；己方已依<span class="cite" data-key="jp541">日本民法第 541 条</span>定相当期间催告，催告期满仍未履行时可解除合同，并参见<span class="cite" data-key="cn563">《中华人民共和国民法典》第五百六十三条</span>关于法定解除的规定。建议把「催告期间」明确为 30 日，避免就「相当期间」发生争议。</p>',
+            '<p><b>四、责任失衡与修改建议</b>：第 9 条只约定日方迟延责任的上限、未约定下限，建议补充「按未出资额日万分之五计付违约金」，并对照<span class="cite" data-key="cn585">《中华人民共和国民法典》第五百八十五条</span>确认约定违约金的调整空间。</p>'] },
+        { t: "人工确认闸门：审查意见是否接受", gate: true,
+          logs: [["gate", "gate → 等待人工确认（真实产品中可先编辑起草结果再继续）"]] },
+        { t: "质检：引用自检 + 图谱适用性校验", qa: true,
+          logs: [["qa", "qa.refs → 抽取正文引用，逐条与本地库条文比对"],
+                 ["qa", "qa.graph → 校验所引法律是否落在本案由请求权基础范围内"]] },
+        { t: "导出 .docx 并记入最近文书", deliver: true,
+          logs: [["deliver", "export(format=docx) → 原生标题 + 表格，写入本机"],
+                 ["deliver", "recent → 已记入首页「最近文书」"]] }
+      ]
+    },
+    lawsuit: {
+      name: "民事起诉状（涉外合资经营合同纠纷）",
+      caseName: "案由：涉外合资经营合同纠纷 · 任务类型 lawsuit",
+      scope: ["中华人民共和国民法典", "日本民法", "日本民事訴訟法", "中华人民共和国民事诉讼法"],
+      steps: [
+        { t: "载入当事人与材料（本地离线提取）", tool: "extract",
+          logs: [["tool", "extract(合资合同.docx) → 12,480 字 · 本地提取，未上传"],
+                 ["tool", "extract(董事会往来邮件.pdf) → 模型转录，标注「非原文」"]],
+          chunks: ['<h4>民事起诉状</h4>',
+            '<p><b>原告</b>：己方公司（住所地：中国·杭州）。<b>被告</b>：日本某株式会社（本店：東京都千代田区）。</p>'] },
+        { t: "生成诉讼请求（请求权基础一一对应）", tool: "reason",
+          logs: [["reason", "reason(claims) → 3 项诉请，各自绑定请求权基础"]],
+          chunks: ['<p><b>诉讼请求</b>：一、判令解除双方《合资经营合同》；二、判令被告支付违约金并赔偿损失；三、诉讼费用由被告承担。上述请求以<span class="cite" data-key="cn577">《中华人民共和国民法典》第五百七十七条</span>与<span class="cite" data-key="cn585">《中华人民共和国民法典》第五百八十五条</span>为基础，诉请金额与违约金计算方法在附件中列明。</p>'] },
+        { t: "事实与理由（时间线组织 + 标注证据）", tool: "reason",
+          logs: [["reason", "reason(facts) → 时间线 6 个节点，逐点标注证据编号"]],
+          chunks: ['<p><b>事实与理由</b>：2026-01-12 双方签署合同（证据 1）→ 2026-03-31 出资期限届满未履行 → 2026-04-08、04-21 两次书面催告（证据 2）→ 2026-05-06 被告明确表示不召开董事会。被告的行为构成债务不履行，依<span class="cite" data-key="jp415">日本民法第 415 条</span>应赔偿损害，且经催告仍未履行，依<span class="cite" data-key="jp541">日本民法第 541 条</span>可以解除合同。</p>',
+            '<table><tr><th>编号</th><th>证据名称</th><th>证明对象</th><th>页数</th></tr>' +
+            '<tr><td>1</td><td>合资经营合同</td><td>合同成立与出资义务</td><td>14</td></tr>' +
+            '<tr><td>2</td><td>催告函及回执</td><td>催告事实与期限届满</td><td>3</td></tr>' +
+            '<tr><td>3</td><td>出资凭证与银行流水</td><td>出资未到位</td><td>8</td></tr></table>'] },
+        { t: "管辖与主体资格说明", tool: "reason",
+          logs: [["reason", "reason(jurisdiction) → 管辖分析：被告住所地在日本，涉财产权诉请"]],
+          chunks: ['<p><b>管辖与举证</b>：被告在日本国内有住所，依<span class="cite" data-key="jp-minji3-2">日本民事訴訟法第 3 条の 2</span>日本法院具有国际裁判管辖；如在中国法院起诉，则以合同履行地与财产所在地主张管辖。举证责任依<span class="cite" data-key="cn67">《中华人民共和国民事诉讼法》第六十七条</span>由主张方承担，故出资未到位的证据由原告提交。</p>'] },
+        { t: "人工确认闸门：起诉状是否定稿", gate: true,
+          logs: [["gate", "gate → 等待人工确认（当事人信息、诉请金额需律师确认）"]] },
+        { t: "质检：引用自检 + 图谱适用性校验", qa: true,
+          logs: [["qa", "qa.refs → 逐条比对本地库"],
+                 ["qa", "qa.graph → 校验所引法律是否在本案由范围内"]] },
+        { t: "导出 .docx 并记入最近文书", deliver: true,
+          logs: [["deliver", "export(format=docx) → 证据目录为 Word 原生表格"],
+                 ["deliver", "recent → 已记入最近文书"]] }
+      ]
+    },
+    evidence: {
+      name: "证据目录（涉外合资经营合同纠纷）",
+      caseName: "案由：涉外合资经营合同纠纷 · 任务类型 evidence",
+      scope: ["中华人民共和国民法典", "中华人民共和国民事诉讼法", "日本民法"],
+      steps: [
+        { t: "材料清单提取（本地离线）", tool: "extract",
+          logs: [["tool", "extract(*) → 6 份材料，均为本地提取"],
+                 ["tool", "extract(验资报告.xlsx) → 表格 42 行"]],
+          chunks: ['<h4>证据目录</h4>',
+            '<p>材料来源：合资合同.docx、催告函.pdf、验资报告.xlsx、董事会通知.docx、银行流水.csv、往来邮件.pdf（共 6 份，本地提取）。</p>'] },
+        { t: "证据编号与证明对象对齐要件", tool: "graph_query",
+          logs: [["tool", "graph_query(要件=出资义务履行) → 命中证据位 2 处"],
+                 ["reason", "编号 1–4 的证据与构成要件逐项对齐"]],
+          chunks: ['<table><tr><th>编号</th><th>证据名称</th><th>证明对象（对应要件）</th><th>页数</th></tr>' +
+            '<tr><td>1</td><td>合资经营合同</td><td>合同成立生效（要件一）</td><td>14</td></tr>' +
+            '<tr><td>2</td><td>验资报告</td><td>出资未到位（要件二）</td><td>6</td></tr>' +
+            '<tr><td>3</td><td>催告函及回执</td><td>催告与期限届满（要件三）</td><td>3</td></tr>' +
+            '<tr><td>4</td><td>银行流水</td><td>损失金额（要件四）</td><td>9</td></tr></table>',
+            '<p>举证责任分配依<span class="cite" data-key="cn67">《中华人民共和国民事诉讼法》第六十七条</span>：主张出资未到位的原告承担举证责任。</p>'] },
+        { t: "缺证项提示与补证建议", tool: "qa",
+          logs: [["qa", "缺证检查 → 要件「董事会决议未作出」缺少书面证据，已标记为待补证"]],
+          chunks: ['<p><b>待补证提示</b>：要件「董事会决议未作出」目前仅有往来邮件，建议补充会议通知送达凭证或公证文书；否则该要件可能因证据不足而不被采纳。</p>'] },
+        { t: "人工确认闸门：补证清单是否采纳", gate: true,
+          logs: [["gate", "gate → 等待人工确认（补证项需律师判断必要性）"]] },
+        { t: "质检：引用自检 + 图谱适用性校验", qa: true,
+          logs: [["qa", "qa.refs → 逐条比对本地库"],
+                 ["qa", "qa.graph → 校验所引法律是否在本案由范围内"]] },
+        { t: "导出 .docx 并记入最近文书", deliver: true,
+          logs: [["deliver", "export(format=docx) → 表格渲染为 Word 原生表格"],
+                 ["deliver", "recent → 已记入最近文书"]] }
+      ]
+    }
+  };
+
+  var RB = { task: "review", idx: 0, running: false, waiting: false, blocked: false, done: false,
+             sec: 3, files: [], timer: null, docStarted: false, status: [], stuck: -1, logLines: 0 };
+  var rbEls = {};
+  ["rbTasks", "rbCase", "rbRun", "rbStep", "rbPause", "rbReset", "rbGate", "rbFake", "rbScope",
+   "rbProg", "rbSteps", "rbPlanPill", "rbLog", "rbLogPill", "rbDoc", "rbDocPill",
+   "rbWord", "rbMd", "rbCopy", "rbExportHint", "rbFiles", "rbFilesPill"]
+    .forEach(function (id) { rbEls[id] = document.getElementById(id); });
+
+  var rbGateBox = null;
+  if (rbEls.rbSteps) {
+    rbGateBox = document.createElement("div");
+    rbGateBox.id = "rbGateBox";
+    rbEls.rbSteps.parentNode.insertBefore(rbGateBox, rbEls.rbSteps.nextSibling);
+  }
+
+  function rbPlan() { return PLANS[RB.task]; }
+  function pad2(n) { return (n < 10 ? "0" : "") + n; }
+  function rbTime() {
+    RB.sec += 1 + (RB.sec % 6);
+    var total = 9 * 3600 + 41 * 60 + 3 + RB.sec;
+    return pad2(Math.floor(total / 3600) % 24) + ":" + pad2(Math.floor(total / 60) % 60) + ":" + pad2(total % 60);
+  }
+  function todayStamp() {
+    var d = new Date();
+    return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()) + " " + pad2(d.getHours()) + ":" + pad2(d.getMinutes());
+  }
+  function rbLogAdd(kind, text, cls) {
+    if (!rbEls.rbLog) return;
+    rbEls.rbLog.insertAdjacentHTML("beforeend",
+      '<div' + (cls ? ' class="' + cls + '"' : "") + '><i>' + rbTime() + '</i> <b>' + esc(kind) + '</b> ' + esc(text) + '</div>');
+    rbEls.rbLog.scrollTop = rbEls.rbLog.scrollHeight;
+    RB.logLines++;
+  }
+  function rbRenderSteps() {
+    if (!rbEls.rbSteps) return;
+    var plan = rbPlan();
+    var PILL = { todo: ["待执行", ""], run: ["执行中", "warn"], done: ["已完成", "ok"], wait: ["待人工确认", "warn"], err: ["已阻断", "err"] };
+    rbEls.rbSteps.innerHTML = plan.steps.map(function (st, i) {
+      var s = RB.status[i] || "todo";
+      var cls = "step-mini" + (s === "done" ? " done" : (s === "run" || s === "wait" ? " run" : ""));
+      var p = PILL[s] || PILL.todo;
+      return '<div class="' + cls + '"><span class="idx">' + (i + 1) + '</span><span>' + esc(st.t) + '</span>' +
+        '<span class="pill ' + p[1] + '">' + p[0] + '</span></div>';
+    }).join("");
+    if (rbEls.rbLogPill) rbEls.rbLogPill.textContent = RB.idx + " / " + plan.steps.length + " 步";
+    if (rbEls.rbProg) rbEls.rbProg.style.width = Math.round((RB.idx / plan.steps.length) * 100) + "%";
+  }
+  function rbSetStatus(i, s) { RB.status[i] = s; rbRenderSteps(); }
+  function rbSetPlanPill(text, cls) {
+    if (!rbEls.rbPlanPill) return;
+    rbEls.rbPlanPill.textContent = text;
+    rbEls.rbPlanPill.className = "pill" + (cls ? " " + cls : "");
+  }
+  function rbDocAppend(html) {
+    if (!rbEls.rbDoc) return;
+    if (!RB.docStarted) { rbEls.rbDoc.innerHTML = ""; RB.docStarted = true; }
+    rbEls.rbDoc.insertAdjacentHTML("beforeend", html);
+    rbEls.rbDoc.scrollTop = rbEls.rbDoc.scrollHeight;
+  }
+  function rbApplyInjections() {
+    var box = rbEls.rbDoc;
+    if (!box || !RB.docStarted) return;
+    if (rbEls.rbFake && rbEls.rbFake.checked && !box.querySelector('[data-injected="fake"]')) {
+      var target = box.querySelector('.cite[data-key^="cn"]') || box.querySelector(".cite");
+      if (target) {
+        target.setAttribute("data-orig-key", target.getAttribute("data-key"));
+        target.setAttribute("data-orig-text", target.textContent);
+        target.setAttribute("data-key", "fake-haishang");
+        target.textContent = "《中华人民共和国海商法》第九十九条";
+        target.setAttribute("data-injected", "fake");
+      }
+    }
+    if (rbEls.rbScope && rbEls.rbScope.checked && !box.querySelector('[data-injected="scope"]')) {
+      var p = document.createElement("p");
+      p.setAttribute("data-injected", "scope");
+      p.innerHTML = '<b>五、商业标识（自动补全）</b>：另可援引<span class="cite" data-key="us1125">美国法典 Title 15 § 1125</span>关于商业标识混淆之规定。';
+      box.appendChild(p);
+    }
+  }
+  function rbAudit() {
+    var box = rbEls.rbDoc;
+    var cites = box ? [].slice.call(box.querySelectorAll(".cite")) : [];
+    var plan = rbPlan(), bad = [], scopeBad = [], ok = 0;
+    cites.forEach(function (c) {
+      c.classList.remove("ok", "bad", "checking");
+      var text = c.textContent.trim();
+      var l = resolveCite(text);
+      if (!l) {
+        c.classList.add("bad"); bad.push(text);
+        rbLogAdd("qa", "✘ 未命中本地库：" + text + " → 疑似编造引用，阻断交付", "bad");
+        return;
+      }
+      if (plan.scope.indexOf(l.cn) < 0) {
+        c.classList.add("bad"); scopeBad.push(l.cn + " " + l.noLabel);
+        rbLogAdd("qa", "✘ 适用性校验未通过：" + l.cn + " " + l.noLabel + " 不在本案由的请求权基础范围内", "bad");
+        return;
+      }
+      c.classList.add("ok"); ok++;
+      rbLogAdd("qa", "✔ " + l.cn + " " + l.noLabel + " 命中本地库（来源 " + l.src + "）", "ok");
+    });
+    RB.blocked = (bad.length + scopeBad.length) > 0;
+    var summary = "引用自检：共 " + cites.length + " 处引用 · " + ok + " 处命中本地库" +
+      (bad.length ? " · " + bad.length + " 处无法核验" : "") +
+      (scopeBad.length ? " · " + scopeBad.length + " 处超出请求权基础范围" : "");
+    rbDocAppend('<p class="hint-inline" style="border-left:2px solid ' + (RB.blocked ? "var(--red)" : "var(--green)") +
+      ';padding-left:10px">' + esc(summary) + "。" + (RB.blocked ? "质检未通过，交付已被阻断。" : "规则级校验通过，允许交付。") + "</p>");
+    if (rbEls.rbDocPill) {
+      rbEls.rbDocPill.textContent = RB.blocked ? "质检未通过" : "质检通过";
+      rbEls.rbDocPill.className = "pill " + (RB.blocked ? "err" : "ok");
+    }
+    rbLogAdd("qa", summary);
+    return { ok: ok, bad: bad, scopeBad: scopeBad };
+  }
+  function rbRenderBlock() {
+    if (!rbGateBox) return;
+    if (!RB.blocked) { rbGateBox.innerHTML = ""; return; }
+    var detail = [];
+    if (rbEls.rbFake && rbEls.rbFake.checked) detail.push("假条号：正文中有一处条文号在本地库中不存在");
+    if (rbEls.rbScope && rbEls.rbScope.checked) detail.push("越界引用：所引法律不在本案由的请求权基础范围内");
+    rbGateBox.innerHTML = '<div class="gate-box" style="border-color:rgba(248,113,113,.5);background:var(--bad-bg)">' +
+      '<b>✘ 交付已阻断</b><br />' + esc(detail.join("；") || "存在无法核验的引用") +
+      '。真实产品此时会停在质检步骤，要求重新检索或修改引用后再交付。' +
+      '<div class="ctl"><button class="btn btn-primary btn-sm" id="rbFix" type="button">移除注入并重新质检</button>' +
+      '<button class="btn btn-sm" id="rbReset2" type="button">↺ 重置演练</button></div></div>';
+    rbSetPlanPill("已阻断交付", "err");
+  }
+  function rbWaitGate(st) {
+    RB.waiting = true;
+    rbSetStatus(RB.idx, "wait");
+    rbSetPlanPill("等待人工确认", "warn");
+    if (rbGateBox) {
+      rbGateBox.innerHTML = '<div class="gate-box"><b>⏸ 人工确认闸门</b><br />第 ' + (RB.idx + 1) + " 步「" + esc(st.t) +
+        '」已产出草稿，真实产品中此处可以由律师编辑后再继续。' +
+        '<div class="ctl"><button class="btn btn-primary btn-sm" id="rbOk" type="button">✓ 确认并继续</button>' +
+        '<button class="btn btn-sm" id="rbNo" type="button">✕ 拒绝（回到计划卡）</button></div></div>';
+    }
+    rbLogAdd("gate", "⏸ 已暂停在人工确认闸门，等待确认…");
+  }
+  function rbTick() {
+    var plan = rbPlan();
+    if (RB.idx >= plan.steps.length) { rbFinish(); return; }
+    var st = plan.steps[RB.idx];
+    RB.waiting = false;
+    rbSetStatus(RB.idx, "run");
+    rbLogAdd("plan", "▶ 第 " + (RB.idx + 1) + "/" + plan.steps.length + " 步：" + st.t);
+    if (st.gate && rbEls.rbGate && rbEls.rbGate.checked) { rbWaitGate(st); return; }
+    RB.timer = setTimeout(function () { rbComplete(st); }, reduce ? 0 : 620);
+  }
+  function rbComplete(st) {
+    var plan = rbPlan();
+    (st.logs || []).forEach(function (l) { rbLogAdd(l[0], l[1]); });
+    if (st.chunks) st.chunks.forEach(rbDocAppend);
+    rbApplyInjections();
+    if (st.qa) {
+      rbAudit();
+      if (RB.blocked) {
+        rbSetStatus(RB.idx, "err");
+        RB.stuck = RB.idx + 1;
+        RB.idx = RB.stuck;
+        RB.running = false;
+        rbRenderSteps(); rbRenderBlock();
+        if (rbEls.rbRun) { rbEls.rbRun.textContent = "▶ 先修复质检问题"; rbEls.rbRun.disabled = true; }
+        return;
+      }
+    }
+    if (st.deliver) {
+      if (RB.blocked) { rbSetStatus(RB.idx, "err"); return; }
+      rbDeliver();
+    }
+    rbSetStatus(RB.idx, "done");
+    RB.idx++;
+    rbRenderSteps();
+    if (RB.idx >= plan.steps.length) { rbFinish(); return; }
+    if (RB.running) {
+      RB.timer = setTimeout(rbTick, reduce ? 0 : 200);
+    } else if (rbEls.rbRun) {
+      rbEls.rbRun.textContent = "▶ 续跑";
+      rbSetPlanPill("已暂停 · 可续跑", "warn");
+    }
+  }
+  function rbFinish() {
+    RB.running = false; RB.done = true; RB.waiting = false;
+    rbSetPlanPill("已完成", "ok");
+    if (rbEls.rbRun) { rbEls.rbRun.textContent = "✔ 计划已执行完"; rbEls.rbRun.disabled = true; }
+    if (rbEls.rbPause) rbEls.rbPause.disabled = true;
+    rbLogAdd("plan", "✔ 任务完成：全部步骤已执行，交付物与最近文书已更新");
+    rbRenderSteps();
+  }
+  function docToMarkdown(root) {
+    var out = [];
+    [].slice.call(root.children).forEach(function (node) {
+      var tag = node.tagName.toLowerCase();
+      if (tag === "h4") out.push("# " + node.textContent.trim());
+      else if (tag === "h5") out.push("## " + node.textContent.trim());
+      else if (tag === "table") {
+        var rows = [].slice.call(node.querySelectorAll("tr")).map(function (tr) {
+          return "| " + [].slice.call(tr.children).map(function (td) { return td.textContent.trim(); }).join(" | ") + " |";
+        });
+        if (rows.length) {
+          var head = rows[0];
+          var sep = "| " + [].slice.call(node.querySelectorAll("tr")[0].children).map(function () { return "---"; }).join(" | ") + " |";
+          out.push([head, sep].concat(rows.slice(1)).join("\n"));
+        }
+      } else if (node.textContent.trim()) out.push(node.textContent.trim());
+    });
+    return out.join("\n\n");
+  }
+  function rbDeliver() {
+    var plan = rbPlan();
+    var bodyHtml = rbEls.rbDoc.innerHTML;
+    var html = wordHtml(plan.name, bodyHtml);
+    var md = docToMarkdown(rbEls.rbDoc);
+    var rec = {
+      name: plan.name + "-Faron.doc",
+      title: plan.name,
+      size: bytesOf(html),
+      chars: md.replace(/\s/g, "").length,
+      time: todayStamp(),
+      html: html,
+      md: md
+    };
+    RB.files.unshift(rec);
+    RB.files = RB.files.slice(0, 4);
+    rbRenderFiles();
+    rbDocAppend('<p class="hint-inline" style="margin-top:10px">交付记录：' + esc(rec.name) + " · " + kb(rec.size) + " · " + rec.time +
+      " 已记入「最近文书」。真实产品在此调用系统程序打开或定位文件。</p>");
+    ["rbWord", "rbMd", "rbCopy"].forEach(function (id) { if (rbEls[id]) rbEls[id].disabled = false; });
+    if (rbEls.rbExportHint) rbEls.rbExportHint.textContent = "已生成 " + rec.name + "（" + kb(rec.size) + "，正文 " + rec.chars + " 字）· 点按钮可下载同一份交付物";
+    if (rbEls.rbDocPill) { rbEls.rbDocPill.textContent = "已交付"; rbEls.rbDocPill.className = "pill ok"; }
+    rbLogAdd("deliver", "export → " + rec.name + "（" + kb(rec.size) + "）");
+  }
+  function rbRenderFiles() {
+    if (!rbEls.rbFiles) return;
+    if (!RB.files.length) {
+      rbEls.rbFiles.innerHTML = '<div class="empty">按「执行计划卡」跑到交付步骤，导出记录会落在这里</div>';
+    } else {
+      rbEls.rbFiles.innerHTML = RB.files.map(function (f, i) {
+        return '<div class="file"><span class="fi">📄</span><span><span class="fn">' + esc(f.name) + '</span><br />' +
+          '<span class="fs">' + esc(f.time) + " · " + kb(f.size) + " · 正文 " + f.chars + ' 字</span></span>' +
+          '<span class="fa"><button class="mini-btn yes" type="button" data-dl="' + i + '" title="下载这份交付物">↓</button>' +
+          '<button class="mini-btn" type="button" data-cp="' + i + '" title="复制全文">⧉</button></span></div>';
+      }).join("");
+    }
+    if (rbEls.rbFilesPill) rbEls.rbFilesPill.textContent = RB.files.length + " 份";
+  }
+  function rbReset() {
+    if (RB.timer) { clearTimeout(RB.timer); RB.timer = null; }
+    var plan = rbPlan();
+    RB.idx = 0; RB.running = false; RB.waiting = false; RB.blocked = false; RB.done = false;
+    RB.sec = 3; RB.stuck = -1; RB.status = []; RB.logLines = 0;
+    plan.steps.forEach(function (_, i) { RB.status[i] = "todo"; });
+    if (rbEls.rbLog) rbEls.rbLog.innerHTML = "";
+    if (rbEls.rbDoc) { rbEls.rbDoc.innerHTML = '<div class="empty">执行到「起草 / 生成」步骤后，交付物会在这里逐段出现。</div>'; }
+    RB.docStarted = false;
+    if (rbGateBox) rbGateBox.innerHTML = "";
+    if (rbEls.rbRun) { rbEls.rbRun.textContent = "▶ 执行计划卡"; rbEls.rbRun.disabled = false; }
+    if (rbEls.rbPause) rbEls.rbPause.disabled = false;
+    ["rbWord", "rbMd", "rbCopy"].forEach(function (id) { if (rbEls[id]) rbEls[id].disabled = true; });
+    if (rbEls.rbExportHint) rbEls.rbExportHint.textContent = "交付物生成后可导出；真实产品导出的是 .docx（原生标题与表格）。";
+    if (rbEls.rbDocPill) { rbEls.rbDocPill.textContent = "未生成"; rbEls.rbDocPill.className = "pill"; }
+    if (rbEls.rbCase) rbEls.rbCase.textContent = plan.caseName;
+    rbSetPlanPill("未开始", "");
+    rbRenderSteps();
+    rbRenderFiles();
+    rbLogAdd("plan", "计划卡已生成 · " + plan.steps.length + " 步 · 已注入案由骨架（" + plan.caseName.replace(/^案由：/, "") + "）");
+    rbLogAdd("tool", "本地库就绪 · " + LAWS.length + " 条示例条文可检索（完整库 152,940 条）");
+  }
+  function rbStart() {
+    if (RB.done || RB.blocked) return;
+    if (RB.waiting) return;
+    RB.running = true;
+    if (rbEls.rbRun) rbEls.rbRun.textContent = "⏳ 执行中…";
+    rbSetPlanPill("执行中", "warn");
+    rbTick();
+  }
+  function rbStepOnce() {
+    if (RB.running || RB.done || RB.blocked || RB.waiting) return;
+    rbTick();
+  }
+  function rbPause() {
+    if (!RB.running) { rbLogAdd("plan", "⏸ 当前没有正在执行的任务"); return; }
+    RB.running = false;
+    rbSetPlanPill("已暂停 · 可续跑", "warn");
+    if (rbEls.rbRun) rbEls.rbRun.textContent = "▶ 续跑";
+    rbLogAdd("plan", "⏸ 已暂停：当前步骤执行完后不再自动推进，可点「续跑」继续");
+  }
+  function rbFix() {
+    var box = rbEls.rbDoc;
+    [].slice.call(box.querySelectorAll("[data-injected]")).forEach(function (n) {
+      var kind = n.getAttribute("data-injected");
+      if (kind === "fake") {
+        n.setAttribute("data-key", n.getAttribute("data-orig-key") || "cn502");
+        n.textContent = n.getAttribute("data-orig-text") || n.textContent;
+        n.removeAttribute("data-injected");
+        n.removeAttribute("data-key-real");
+      } else {
+        n.parentNode.removeChild(n);
+      }
+    });
+    if (rbEls.rbFake) rbEls.rbFake.checked = false;
+    if (rbEls.rbScope) rbEls.rbScope.checked = false;
+    rbLogAdd("qa", "已移除注入的假条号 / 越界引用，重新运行质检…");
+    if (rbGateBox) rbGateBox.innerHTML = "";
+    RB.blocked = false;
+    if (rbEls.rbRun) rbEls.rbRun.disabled = false;
+    var r = rbAudit();
+    if (!RB.blocked) {
+      var plan = rbPlan();
+      var deliv = -1;
+      plan.steps.forEach(function (s, i) { if (s.deliver) deliv = i; });
+      RB.status = RB.status.map(function (s) { return s === "err" ? "done" : s; });
+      if (deliv >= 0 && RB.status[deliv] !== "done") {
+        rbDeliver();
+        RB.status[deliv] = "done";
+      }
+      RB.idx = plan.steps.length;
+      rbRenderSteps();
+      rbFinish();
+    } else {
+      rbRenderBlock();
+    }
+    return r;
+  }
+
+  if (rbEls.rbTasks) {
+    rbEls.rbTasks.addEventListener("click", function (e) {
+      var b = e.target.closest("[data-task]");
+      if (!b) return;
+      RB.task = b.getAttribute("data-task");
+      [].slice.call(rbEls.rbTasks.querySelectorAll("[data-task]")).forEach(function (x) {
+        x.setAttribute("aria-pressed", x === b ? "true" : "false");
+      });
+      rbReset();
+    });
+  }
+  if (rbEls.rbRun) rbEls.rbRun.addEventListener("click", rbStart);
+  if (rbEls.rbStep) rbEls.rbStep.addEventListener("click", rbStepOnce);
+  if (rbEls.rbPause) rbEls.rbPause.addEventListener("click", rbPause);
+  if (rbEls.rbReset) rbEls.rbReset.addEventListener("click", function () { rbReset(); });
+  if (rbEls.rbGate) rbEls.rbGate.addEventListener("change", function () {
+    rbLogAdd("plan", rbEls.rbGate.checked ? "已开启人工确认闸门：关键步骤会停下等确认" : "已关闭人工确认闸门：将连续执行（真实产品默认开启）");
+  });
+  if (rbEls.rbFake) rbEls.rbFake.addEventListener("change", function () {
+    rbLogAdd("plan", rbEls.rbFake.checked ? "已注入 1 处假条号（《中华人民共和国海商法》第九十九条，本地库不存在）" : "已取消假条号注入");
+    if (RB.docStarted) { rbApplyInjections(); rbRenderSteps(); }
+  });
+  if (rbEls.rbScope) rbEls.rbScope.addEventListener("change", function () {
+    rbLogAdd("plan", rbEls.rbScope.checked ? "已注入 1 处越界引用（美国法典 Title 15 § 1125，库中存在但不在本案由范围）" : "已取消越界引用注入");
+    if (RB.docStarted) { rbApplyInjections(); rbRenderSteps(); }
+  });
+  if (rbGateBox) {
+    rbGateBox.addEventListener("click", function (e) {
+      var t = e.target;
+      if (t.id === "rbOk") {
+        var st = rbPlan().steps[RB.idx];
+        RB.waiting = false;
+        rbLogAdd("gate", "✔ 人工确认通过：继续执行后续步骤");
+        rbComplete(st);
+      } else if (t.id === "rbNo") {
+        RB.waiting = false; RB.running = false;
+        rbSetStatus(RB.idx, "err");
+        rbSetPlanPill("已拒绝 · 待修改计划卡", "err");
+        rbLogAdd("gate", "✕ 人工拒绝：任务已停止，可修改计划卡后重新执行");
+        rbGateBox.innerHTML = '<div class="gate-box">已按人工意见停止。真实产品中可回到计划卡修改步骤后重新执行，历史任务可载入续跑。' +
+          '<div class="ctl"><button class="btn btn-sm" id="rbReset2" type="button">↺ 重置演练</button></div></div>';
+      } else if (t.id === "rbFix") {
+        rbFix();
+      } else if (t.id === "rbReset2") {
+        rbReset();
+      }
+    });
+  }
+  if (rbEls.rbFiles) {
+    rbEls.rbFiles.addEventListener("click", function (e) {
+      var b = e.target.closest("[data-dl],[data-cp]");
+      if (!b) return;
+      var i = parseInt(b.getAttribute("data-dl") != null ? b.getAttribute("data-dl") : b.getAttribute("data-cp"), 10);
+      var f = RB.files[i];
+      if (!f) return;
+      if (b.getAttribute("data-dl") != null) {
+        downloadFile(f.name, "application/msword", f.html);
+        rbLogAdd("deliver", "已下载 " + f.name);
+      } else {
+        copyText(f.md, function () { rbLogAdd("deliver", "已复制 " + f.name + " 全文（" + f.chars + " 字）"); },
+          function () { rbLogAdd("deliver", "当前环境不允许自动复制，请用「导出」按钮下载"); });
+      }
+    });
+  }
+  if (rbEls.rbWord) rbEls.rbWord.addEventListener("click", function () {
+    if (!RB.files.length) return;
+    downloadFile(RB.files[0].name, "application/msword", RB.files[0].html);
+    rbLogAdd("deliver", "导出 Word：已下载 " + RB.files[0].name);
+  });
+  if (rbEls.rbMd) rbEls.rbMd.addEventListener("click", function () {
+    if (!RB.files.length) return;
+    downloadFile(RB.files[0].name.replace(/\.doc$/, ".md"), "text/markdown", RB.files[0].md);
+    rbLogAdd("deliver", "导出 Markdown：已下载同名 .md");
+  });
+  if (rbEls.rbCopy) rbEls.rbCopy.addEventListener("click", function () {
+    if (!RB.files.length) return;
+    copyText(RB.files[0].md, function () { rbLogAdd("deliver", "已复制交付物全文到剪贴板"); },
+      function () { rbLogAdd("deliver", "当前环境不允许自动复制，请用「导出」按钮下载"); });
+  });
+  var goRunbook = document.getElementById("goRunbook");
+  if (goRunbook) {
+    goRunbook.addEventListener("click", function () {
+      var sec = document.getElementById("runbook");
+      if (sec) { try { sec.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" }); } catch (e) { sec.scrollIntoView(); } }
+      if (RB.done || RB.blocked) rbReset();
+      setTimeout(function () { rbStart(); }, reduce ? 0 : 420);
+    });
+  }
+
+  rbReset();
+
+  FaronDemo.runbook = {
+    plans: PLANS,
+    start: rbStart, step: rbStepOnce, pause: rbPause, reset: rbReset, fix: rbFix,
+    state: function () {
+      return { task: RB.task, idx: RB.idx, total: rbPlan().steps.length, running: RB.running,
+               waiting: RB.waiting, blocked: RB.blocked, done: RB.done, files: RB.files.length,
+               cites: rbEls.rbDoc ? rbEls.rbDoc.querySelectorAll(".cite").length : 0,
+               citesOk: rbEls.rbDoc ? rbEls.rbDoc.querySelectorAll(".cite.ok").length : 0,
+               citesBad: rbEls.rbDoc ? rbEls.rbDoc.querySelectorAll(".cite.bad").length : 0,
+               steps: RB.status.slice() };
+    },
+    confirm: function () { var st = rbPlan().steps[RB.idx]; RB.waiting = false; rbComplete(st); },
+    setTask: function (t) { RB.task = t; rbReset(); },
+    auditNow: rbAudit
+  };
+
+  /* ============================================================
+     ⑦ 桌面悬浮球：划词 → 翻译 / 关联查找 / 询问 AI / 复制 + 皮肤 + 抓取模式
+     ============================================================ */
+  var BALL = { skin: "gold", mode: "follow", sel: "", sec: 0, n: 0 };
+  var docWrap = document.getElementById("docWrap"),
+      docMock = document.getElementById("docMock"),
+      selBall = document.getElementById("selBall"),
+      selMenu = document.getElementById("selMenu"),
+      ballBubble = document.getElementById("ballBubble"),
+      ballLog = document.getElementById("ballLog"),
+      ballSelPill = document.getElementById("ballSelPill"),
+      ballActPill = document.getElementById("ballActPill"),
+      ballSkinRoot = document.getElementById("ballSkinRoot"),
+      fbSkinRoot = document.getElementById("fbSkinRoot");
+
+  var GLOSS = [
+    { k: "出资比例与验资程序", ja: "出資比率及び資本検証の手続", en: "the capital contribution ratio and the capital verification procedure" },
+    { k: "日方逾期未出资且拒不召开董事会", ja: "日本側は出資を期限どおり履行せず、取締役会の招集にも応じない", en: "the Japanese party failed to contribute its capital on time and refused to convene the board of directors" },
+    { k: "经两次书面催告后仍未履行", ja: "二度の書面による催告後もなお履行しない", en: "still failed to perform after two written demands" },
+    { k: "请求解除合同并赔偿损失", ja: "契約の解除及び損害賠償を請求する", en: "to claim rescission of the contract and damages" },
+    { k: "涉外合资经营合同纠纷", ja: "渉外合弁事業契約紛争", en: "a foreign-related joint venture contract dispute" },
+    { k: "逾期未出资按未缴金额计付违约金", ja: "期限を過ぎた出資については未払額に応じて違約金を支払う", en: "liquidated damages accrue on the unpaid amount for late contribution" },
+    { k: "属于不可抗力", ja: "不可抗力に該当する", en: "constitutes force majeure" },
+    { k: "约定不明", ja: "約定が不明確である", en: "the agreement is unclear" }
+  ];
+  var SKIN_NAME = { gold: "鎏金", indigo: "靛蓝", ink: "墨玉", seal: "朱印" };
+
+  function ballTime() {
+    BALL.sec += 2 + (BALL.sec % 4);
+    var total = 9 * 3600 + 41 * 60 + 3 + BALL.sec;
+    return pad2(Math.floor(total / 3600) % 24) + ":" + pad2(Math.floor(total / 60) % 60) + ":" + pad2(total % 60);
+  }
+  function ballLogAdd(text) {
+    if (!ballLog) return;
+    ballLog.insertAdjacentHTML("beforeend", "<div><i>" + ballTime() + "</i> " + esc(text) + "</div>");
+    ballLog.scrollTop = ballLog.scrollHeight;
+  }
+  function short(s, n) { s = String(s || ""); return s.length > n ? s.slice(0, n) + "…" : s; }
+
+  function ballHide() {
+    if (selBall) selBall.classList.remove("on");
+    if (selMenu) selMenu.classList.remove("on");
+  }
+  function ballShowAt(rect) {
+    if (!docWrap || !selBall || !rect) return;
+    var wr = docWrap.getBoundingClientRect();
+    var x = rect.right - wr.left, y = rect.top - wr.top;
+    if (BALL.mode === "fixed") { x = wr.width - 30; y = wr.height - 34; }
+    x = Math.max(24, Math.min(x, wr.width - 24));
+    y = Math.max(28, y);
+    selBall.style.left = x + "px";
+    selBall.style.top = y + "px";
+    if (selMenu) {
+      selMenu.style.left = Math.max(72, Math.min(x, Math.max(wr.width - 72, 72))) + "px";
+      selMenu.style.top = y + "px";
+    }
+    selBall.classList.add("on");
+  }
+  function ballRender(title, bodyHtml, withSrc) {
+    if (!ballBubble) return;
+    ballBubble.innerHTML = '<div class="bh">悬浮球 · ' + esc(title) + (BALL.mode === "fixed" ? " · 固定右下" : " · 跟随选区") + '</div>' +
+      (withSrc !== false ? '<div class="src">“' + esc(short(BALL.sel, 52)) + '”</div>' : "") + bodyHtml;
+    if (ballActPill) { ballActPill.textContent = title; ballActPill.className = "pill ok"; }
+  }
+  function guessIssue(text) {
+    var map = [["出资", "出资义务履行"], ["验资", "出资义务履行"], ["董事会", "公司治理与决议程序"],
+      ["催告", "迟延履行与催告"], ["解除", "合同解除权"], ["不可抗力", "免责事由与不可抗力"],
+      ["违约金", "违约责任与违约金调整"], ["约定不明", "合同解释与约定不明"], ["管辖", "国际裁判管辖"]];
+    for (var i = 0; i < map.length; i++) if (text.indexOf(map[i][0]) >= 0) return map[i][1];
+    return "合同履行与违约责任";
+  }
+
+  function ballTranslate(text) {
+    var hits = GLOSS.filter(function (g) { return text.indexOf(g.k) >= 0 || g.k.indexOf(text) >= 0; });
+    var body = "";
+    if (hits.length) {
+      body = hits.map(function (g) {
+        return '<div class="tr">' + esc(g.k) + "</div><div>日： " + esc(g.ja) + "</div><div>英： " + esc(g.en) + "</div>";
+      }).join('<hr style="border:0;border-top:1px dashed var(--border);margin:9px 0" />') +
+      '<p class="hint-inline">命中术语表 ' + hits.length + " 条 · 术语跨段一致（同一术语全文同一译法）</p>";
+    } else {
+      var near = GLOSS.filter(function (g) { return overlap(g.k, text) >= 2; });
+      body = '<p class="hint-inline">术语表未完全匹配，已按整句发送到你在「数据设置」配置的模型接口；' +
+        "真实产品会连同前后段落一起翻译，并锁定术语一致。</p>" +
+        (near.length ? '<div>最接近的术语：' + esc(near[0].k) + " → 日 " + esc(near[0].ja) + " / 英 " + esc(near[0].en) + "</div>" : "");
+    }
+    ballRender("翻译", body);
+    ballLogAdd("action=translate → " + (hits.length ? "命中术语 " + hits.length + " 条" : "未命中术语表，转整句翻译") + "（选区 " + text.length + " 字）");
+  }
+  function overlap(a, b) {
+    var n = 0;
+    for (var i = 0; i < a.length; i++) if (b.indexOf(a.charAt(i)) >= 0) n++;
+    return n;
+  }
+  function ballLink(text) {
+    var hits = linkLaws(text, 3);
+    if (!hits.length) {
+      ballRender("关联查找", '<p class="hint-inline">示例库中没有与该片段直接相关的条文；完整库 152,940 条可命中更多结果。</p>');
+      ballLogAdd("action=link → 示例库未命中，建议扩大选区或换关键词");
+      return hits;
+    }
+    var body = "<p>按条文关键词命中 " + hits.length + " 条相关条文：</p>" + hits.map(function (h) {
+      return "<div><b>" + esc(h.law.cn + " " + h.law.noLabel) + '</b> <span class="hint-inline">' + h.law.domain +
+        " · 匹配度 " + h.score + "</span><br />" + esc(short(h.law.tr, 48)) + "</div>";
+    }).join('<hr style="border:0;border-top:1px dashed var(--border);margin:9px 0" />') +
+      '<div class="acts">' + hits.map(function (h) {
+        return '<button class="mini-link" type="button" data-open="' + h.law.id + '">在检索台看 ' + esc(h.law.noLabel) + "</button>";
+      }).join("") + "</div>";
+    ballRender("关联查找", body);
+    ballLogAdd("action=link → 命中 " + hits.length + " 条，最高：" + hits[0].law.cn + " " + hits[0].law.noLabel + "（匹配度 " + hits[0].score + "）");
+    return hits;
+  }
+  function ballAsk(text) {
+    var hits = linkLaws(text, 2);
+    var cite = hits.map(function (h) { return h.law.cn + " " + h.law.noLabel; }).join("、");
+    var body = "<p>已把「选区 + 所属段落 + 当前案由（涉外合资经营合同纠纷）」发送到你在「数据设置」中配置的模型接口。" +
+      "演示环境用内置规则模拟返回：</p>" +
+      '<p class="tr">该表述指向的要件是「' + esc(guessIssue(text)) + "」。可优先援引 " + esc(cite || "本地库中相关条文") +
+      "；成稿前请确认引用条文在本地库已命中，并注意催告期间与举证责任的分配。</p>" +
+      '<p class="hint-inline">真实产品在此调用你自己配置的模型；法条一律来自本地库检索，不交给模型记忆。</p>';
+    ballRender("询问 AI", body);
+    ballLogAdd("action=ask → 已组装上下文（选区 " + text.length + " 字 + 案由）并请求模型接口");
+  }
+  function ballCopy(text) {
+    copyText(text, function () {
+      ballRender("复制", '<p class="tr">已复制 ' + text.length + " 字到剪贴板。</p>");
+      ballLogAdd("action=copy → 已复制 " + text.length + " 字");
+    }, function () {
+      ballRender("复制", '<p class="hint-inline">当前环境不允许自动复制，请手动选中复制（离线双击打开时浏览器会限制剪贴板权限）。</p>');
+      ballLogAdd("action=copy → 剪贴板权限被拒绝，已提示手动复制");
+    });
+  }
+  function ballAct(act, text) {
+    text = String(text == null ? BALL.sel : text).trim();
+    if (!text) { ballRender("待命中", "<p>先在左侧摘要里选一段文字，或点「用示例句子试一次」。</p>", false); return; }
+    BALL.sel = text;
+    if (selMenu) selMenu.classList.remove("on");
+    if (act === "link") return ballLink(text);
+    if (act === "ask") return ballAsk(text);
+    if (act === "copy") return ballCopy(text);
+    return ballTranslate(text);
+  }
+  function ballSelectSample() {
+    if (!docMock || !window.getSelection) return "";
+    var p = docMock.querySelectorAll("p")[1] || docMock.querySelector("p");
+    var range = document.createRange();
+    range.selectNodeContents(p);
+    var sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    BALL.sel = String(sel).trim();
+    if (ballSelPill) { ballSelPill.textContent = BALL.sel.length + " 字已选中"; ballSelPill.className = "pill ok"; }
+    ballShowAt(range.getBoundingClientRect());
+    ballLogAdd("示例选区 → 第 2 段共 " + BALL.sel.length + " 字（" + (BALL.mode === "fixed" ? "固定右下" : "跟随选区") + "）");
+    return BALL.sel;
+  }
+  function ballDemo(act) {
+    var sec = document.getElementById("ball");
+    if (sec) { try { sec.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" }); } catch (e) { sec.scrollIntoView(); } }
+    var run = function () {
+      ballSelectSample();
+      if (act) ballAct(act);
+    };
+    if (reduce) run(); else setTimeout(run, 380);
+  }
+  function ballSetSkin(skin) {
+    if (!SKIN_NAME[skin]) return;
+    BALL.skin = skin;
+    if (selBall) selBall.setAttribute("data-skin", skin);
+    if (ballSkinRoot) ballSkinRoot.setAttribute("data-skin", skin);
+    if (fbSkinRoot) fbSkinRoot.setAttribute("data-skin", skin);
+    [].slice.call(document.querySelectorAll(".skin-dot")).forEach(function (d) {
+      d.classList.toggle("on", d.getAttribute("data-skin") === skin);
+    });
+    try { localStorage.setItem("faron-demo-ball-skin", skin); } catch (e) {}
+    ballLogAdd("外观皮肤 → " + SKIN_NAME[skin] + "（同时作用于产品实况里的悬浮球）");
+  }
+  function ballSetMode(mode) {
+    BALL.mode = mode === "fixed" ? "fixed" : "follow";
+    var seg = document.getElementById("ballMode");
+    if (seg) {
+      [].slice.call(seg.querySelectorAll("[data-mode]")).forEach(function (b) {
+        b.classList.toggle("on", b.getAttribute("data-mode") === BALL.mode);
+      });
+    }
+    ballLogAdd("抓取模式 → " + (BALL.mode === "fixed" ? "固定右下（不跟随选区）" : "跟随选区"));
+    if (BALL.sel && docMock) {
+      var r = docMock.getBoundingClientRect();
+      ballShowAt({ right: r.right - 24, top: r.top + 30 });
+    }
+  }
+
+  if (docMock) {
+    document.addEventListener("mouseup", function (e) {
+      if (selBall && selBall.contains(e.target)) return;
+      if (selMenu && selMenu.contains(e.target)) return;
+      if (ballBubble && ballBubble.contains(e.target)) return;
+      var sel = window.getSelection ? window.getSelection() : null;
+      if (!sel || !sel.rangeCount) { return; }
+      var text = String(sel).trim();
+      if (!text || text.length < 2 || !docMock.contains(sel.anchorNode)) { return; }
+      BALL.sel = text;
+      if (ballSelPill) { ballSelPill.textContent = text.length + " 字已选中"; ballSelPill.className = "pill ok"; }
+      ballShowAt(sel.getRangeAt(0).getBoundingClientRect());
+      ballLogAdd("选区 " + text.length + " 字 → 悬浮球浮出（" + (BALL.mode === "fixed" ? "固定右下" : "跟随选区") + "）");
+    });
+    document.addEventListener("mousedown", function (e) {
+      if ((selBall && selBall.contains(e.target)) || (selMenu && selMenu.contains(e.target))) return;
+      if (ballBubble && ballBubble.contains(e.target)) return;
+      if (docMock.contains(e.target)) return;
+      ballHide();
+    });
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape") ballHide(); });
+  }
+  if (selBall) {
+    selBall.addEventListener("click", function (e) {
+      e.stopPropagation();
+      var on = selMenu && selMenu.classList.toggle("on");
+      ballLogAdd(on ? "悬浮球 → 菜单展开：翻译 / 关联查找 / 询问 AI / 复制" : "悬浮球 → 菜单收起");
+    });
+  }
+  if (selMenu) {
+    selMenu.addEventListener("click", function (e) {
+      var b = e.target.closest("[data-act]");
+      if (b) ballAct(b.getAttribute("data-act"));
+    });
+  }
+  if (ballBubble) {
+    ballBubble.addEventListener("click", function (e) {
+      var b = e.target.closest("[data-open]");
+      if (!b) return;
+      var id = b.getAttribute("data-open");
+      swOpen(id, "来自悬浮球「关联查找」的结果");
+      var sec = document.getElementById("search");
+      if (sec) { try { sec.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" }); } catch (err) { sec.scrollIntoView(); } }
+      ballLogAdd("跳转 → 已在检索台打开 " + (LIB[id] ? LIB[id].cn + " " + LIB[id].noLabel : id));
+    });
+  }
+  var ballSample = document.getElementById("ballSample");
+  if (ballSample) ballSample.addEventListener("click", function () { ballSelectSample(); ballAct("translate"); });
+  var ballMode = document.getElementById("ballMode");
+  if (ballMode) {
+    ballMode.addEventListener("click", function (e) {
+      var b = e.target.closest("[data-mode]");
+      if (b) ballSetMode(b.getAttribute("data-mode"));
+    });
+  }
+  [].slice.call(document.querySelectorAll(".skin-dot")).forEach(function (d) {
+    d.addEventListener("click", function () { ballSetSkin(d.getAttribute("data-skin")); });
+  });
+  var heroBall = document.getElementById("heroBall");
+  if (heroBall) heroBall.addEventListener("click", function () { ballDemo(null); });
+  /* 产品实况里的悬浮球菜单 → 跳到划词体验并真的执行该动作 */
+  var fbMenuEl = document.getElementById("fbMenu");
+  if (fbMenuEl) {
+    var ACT_BY_LABEL = { "翻译": "translate", "关联查找": "link", "询问 AI": "ask", "询问": "ask", "关联": "link" };
+    fbMenuEl.addEventListener("click", function (e) {
+      var b = e.target.closest("button");
+      if (!b) return;
+      var label = (b.getAttribute("data-label") || b.textContent || "").trim();
+      var act = ACT_BY_LABEL[label] || "translate";
+      ballDemo(act);
+    });
+  }
+  (function ballRestore() {
+    var skin = null;
+    try { skin = localStorage.getItem("faron-demo-ball-skin"); } catch (e) {}
+    if (skin) ballSetSkin(skin);
+  })();
+  if (ballLog && !ballLog.children.length) {
+    ballLogAdd("悬浮球已就绪 · 选中左侧任意文字即可浮出");
+  }
+
+  FaronDemo.ball = {
+    demo: ballDemo, selectSample: ballSelectSample, act: ballAct, setSkin: ballSetSkin,
+    setMode: ballSetMode, gloss: GLOSS, link: linkLaws,
+    state: function () {
+      return { skin: BALL.skin, mode: BALL.mode, sel: BALL.sel, selLen: BALL.sel.length,
+               ballOn: !!(selBall && selBall.classList.contains("on")),
+               menuOn: !!(selMenu && selMenu.classList.contains("on")),
+               bubble: ballBubble ? ballBubble.textContent.trim().slice(0, 40) : "" };
+    }
+  };
+  FaronDemo.ballDemo = ballDemo;
+
+  /* ==== DEMO-ANCHOR：后续演示模块在此之上插入 ==== */
+})();
+</script>
+</body>
+</html>
