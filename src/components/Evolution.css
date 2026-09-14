@@ -15,8 +15,8 @@
   --evo-warn-bg: #fdf4e3;
   --evo-warn-fg: #8a5d0d;
   --evo-no-bg: #fdecea;
-  --evo-no-fg: #c0392b;
-  --evo-measure: #c0392b;
+  --evo-no-fg: #b3261e;
+  --evo-measure: #b3261e;
 }
 
 :root[data-theme="dark"] .evo {
@@ -29,9 +29,9 @@
   --evo-ok-fg: #7fd6a0;
   --evo-warn-bg: rgba(138, 93, 13, 0.3);
   --evo-warn-fg: #e8c274;
-  --evo-no-bg: rgba(192, 57, 43, 0.24);
-  --evo-no-fg: #ff8a80;
-  --evo-measure: #ff8a80;
+  --evo-no-bg: rgba(179, 38, 30, 0.24);
+  --evo-no-fg: #f2b8b5;
+  --evo-measure: #f2b8b5;
 }
 
 /* ---------- 页面头部 ---------- */

@@ -17,12 +17,12 @@
   /* 边与候选边 */
   --kg-edge: #c2c2cd;
   --kg-cand: #c79a3a;
-  --kg-glow: rgba(75, 63, 227, 0.32);
+  --kg-glow: rgba(217, 0, 0, 0.32);
   /* 人工确认 / 拒绝按钮 */
   --kg-ok-bg: #ebf7ef;
   --kg-ok-fg: #1e6b3c;
   --kg-no-bg: #fdecea;
-  --kg-no-fg: #c0392b;
+  --kg-no-fg: #b3261e;
 }
 
 :root[data-theme="dark"] .kg {
@@ -33,11 +33,11 @@
   --kg-doc: #9b9ba6;
   --kg-edge: #4a4a58;
   --kg-cand: #c9a04a;
-  --kg-glow: rgba(122, 108, 255, 0.45);
+  --kg-glow: rgba(255, 68, 68, 0.45);
   --kg-ok-bg: rgba(30, 107, 60, 0.3);
   --kg-ok-fg: #7fd6a0;
-  --kg-no-bg: rgba(192, 57, 43, 0.24);
-  --kg-no-fg: #ff8a80;
+  --kg-no-bg: rgba(179, 38, 30, 0.24);
+  --kg-no-fg: #f2b8b5;
 }
 
 /* ---------- 头部 ---------- */

@@ -56,7 +56,7 @@ export default function Home() {
       <div className="stat-row">
         {stats.map((s) => (
           <div className="card stat" key={s.label}>
-            <div className="stat-value" style={{ color: s.danger ? "#c0392b" : "var(--brand)" }}>
+            <div className="stat-value" style={{ color: s.danger ? "var(--danger)" : "var(--brand)" }}>
               {s.value}
             </div>
             <div className="stat-label">{s.label}</div>

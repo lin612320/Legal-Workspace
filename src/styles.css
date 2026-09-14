@@ -1,36 +1,70 @@
+/* ==========================================================================
+   设计令牌
+   品牌色取自 LOGO「法元」：纯正红渐变（#EC0205 → #8A0006）+ 黑色字标。
+   设计理念：红色＝中国品牌；渐变＝智能、科技；平行四边形＝高效利落。
+   因此主色用鲜亮正红，强调态复用 logo 红渐变；中性色统一带红调暖灰，
+   让亮/暗两套主题都与品牌红同源。
+   语义色另立一套：错误/删除用深砖红，避免和品牌正红撞色。
+   ========================================================================== */
 :root {
-  --brand: #4b3fe3;
-  --brand-soft: #f2f7ff;
-  --brand-text: #1a1759;
+  /* ---------- 品牌色 ---------- */
+  --brand: #d90000;          /* 品牌主色：白字对比度 5.3:1，可同时作底色与文字色 */
+  --brand-bright: #ea0202;   /* LOGO 标志红（渐变最亮端，与 CHANGELOG 实测口径一致） */
+  --brand-deep: #8c1012;     /* LOGO 红渐变最暗端（同上） */
+  --brand-on: #ffffff;       /* 铺在 --brand 实底上的文字色 */
+  --brand-soft: #fff5f5;     /* 品牌浅底 */
+  --brand-text: #8c1012;     /* 品牌浅底上的文字 */
+  --brand-tint: #ffd9d9;     /* 品牌淡描边 */
+  /* LOGO 红渐变（亮暗主题共用：就是标志本身的颜色），白字对比度 4.6:1 起 */
+  --brand-grad: linear-gradient(135deg, #ea0202 0%, #8c1012 100%);
+  --brand-grad-on: #ffffff;
+
+  /* ---------- 语义色：深砖红，与品牌正红区分 ---------- */
+  --danger: #b3261e;
+  --danger-soft: #fdecea;
+  --danger-border: #f2c4c0;
+
+  /* ---------- 中性色：带红调暖灰 ---------- */
   --surface: #ffffff;
-  --surface-muted: #f6f6f8;
-  --border: #e6e6ea;
-  --text: #1a1a1a;
-  --text-muted: #6b6b73;
+  --surface-muted: #faf7f7;
+  --border: #ede7e7;
+  --border-strong: #ddd4d4;
+  --text: #1b1616;
+  --text-muted: #6b6161;
   --radius: 8px;
   font-size: 14px;
 }
 
 /* ---------- 夜间模式 ---------- */
 :root[data-theme="dark"] {
-  --brand: #7a6cff;
-  --brand-soft: #26223a;
-  --brand-text: #cfc5ff;
-  --surface: #1f1f27;
-  --surface-muted: #17171d;
-  --border: #30303a;
-  --text: #e9e9ef;
-  --text-muted: #9b9ba6;
+  --brand: #ff4444;
+  --brand-bright: #ff6b6b;
+  --brand-deep: #b00008;
+  --brand-on: #2b0808;       /* 亮红实底配深字，避免白字掉到 3.4:1 */
+  --brand-soft: #3a2323;
+  --brand-text: #ffc9c9;
+  --brand-tint: #5c3333;
+
+  --danger: #f2b8b5;
+  --danger-soft: rgba(179, 38, 30, 0.24);
+  --danger-border: rgba(242, 184, 181, 0.35);
+
+  --surface: #201a1a;
+  --surface-muted: #171313;
+  --border: #332b2b;
+  --border-strong: #453939;
+  --text: #ede8e8;
+  --text-muted: #a29898;
 }
 
 :root[data-theme="dark"] .danger-btn {
-  background: rgba(192, 57, 43, 0.16);
-  border-color: rgba(255, 138, 128, 0.35);
-  color: #ff8a80;
+  background: var(--danger-soft);
+  border-color: var(--danger-border);
+  color: var(--danger);
 }
 
 :root[data-theme="dark"] .danger-btn:hover {
-  background: rgba(192, 57, 43, 0.28);
+  background: rgba(179, 38, 30, 0.38);
 }
 
 :root[data-theme="dark"] input,
@@ -103,13 +137,15 @@ body {
   width: 30px;
   height: 30px;
   border-radius: 8px;
-  background: var(--brand);
-  color: #fff;
+  /* 复用 LOGO 的红渐变，呼应「渐变＝智能、科技」的设计理念 */
+  background: var(--brand-grad);
+  color: var(--brand-grad-on);
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 700;
   font-size: 15px;
+  box-shadow: 0 2px 8px rgba(138, 0, 6, 0.28);
 }
 
 .brand-name {
@@ -165,8 +201,8 @@ body {
   height: 18px;
   padding: 0 5px;
   border-radius: 999px;
-  background: #e03e3e;
-  color: #fff;
+  background: var(--brand);
+  color: var(--brand-on);
   font-size: 11px;
   font-weight: 700;
   display: inline-flex;
@@ -246,7 +282,7 @@ body {
 
 .ghost-btn:hover {
   color: var(--text);
-  border-color: #d3d3d8;
+  border-color: var(--border-strong);
 }
 
 /* ---------- 通用卡片 / 面板 ---------- */
@@ -298,9 +334,13 @@ button.primary {
   border: none;
   border-radius: var(--radius);
   background: var(--brand);
-  color: #fff;
+  color: var(--brand-on);
   font-weight: 600;
   cursor: pointer;
+}
+
+button.primary:hover {
+  background: var(--brand-bright);
 }
 
 button.primary:disabled {
@@ -313,14 +353,14 @@ button.danger-btn {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
-  color: #c0392b;
+  color: var(--danger);
   font-size: 13px;
   cursor: pointer;
 }
 
 button.danger-btn:hover {
-  border-color: #e0b3ad;
-  background: #fdf3f2;
+  border-color: var(--danger-border);
+  background: var(--danger-soft);
 }
 
 .form-grid {
@@ -444,8 +484,8 @@ button.danger-btn:hover {
 }
 
 .tag-danger {
-  background: #fdecea;
-  color: #c0392b;
+  background: var(--danger-soft);
+  color: var(--danger);
 }
 
 .todo-actions {
@@ -487,15 +527,15 @@ button.danger-btn:hover {
 }
 
 .overdue-banner {
-  background: #fdecea;
-  color: #8a1f18;
-  border: 1px solid #f3c1bb;
+  background: var(--danger-soft);
+  color: #7a1810;
+  border: 1px solid var(--danger-border);
   border-radius: 12px;
   padding: 12px 16px;
 }
 
 .overdue-banner a {
-  color: #c0392b;
+  color: var(--danger);
   font-weight: 600;
 }
 
@@ -669,11 +709,12 @@ button.danger-btn:hover {
 }
 
 button.primary.danger {
-  background: #c0392b;
+  background: var(--danger);
+  color: #fff;
 }
 
 button.primary.danger:hover {
-  background: #a93226;
+  background: #921c15;
 }
 
 .settings-msg {
@@ -691,9 +732,9 @@ button.primary.danger:hover {
 }
 
 .settings-msg.err {
-  background: #fdecea;
-  color: #8a1f18;
-  border: 1px solid #f3c1bb;
+  background: var(--danger-soft);
+  color: #7a1810;
+  border: 1px solid var(--danger-border);
 }
 
 /* ---------- 翻译 ---------- */
@@ -958,7 +999,7 @@ button.primary.danger:hover {
 
 .msg.user .msg-bubble {
   background: var(--brand);
-  color: #fff;
+  color: var(--brand-on);
   border-bottom-right-radius: 4px;
 }
 
@@ -1297,16 +1338,16 @@ button.primary.small {
 .danger-btn {
   margin-left: 8px;
   padding: 5px 14px;
-  border: 1px solid #f3c1bb;
+  border: 1px solid var(--danger-border);
   border-radius: 8px;
-  background: #fdecea;
-  color: #c0392b;
+  background: var(--danger-soft);
+  color: var(--danger);
   font-size: 12px;
   cursor: pointer;
 }
 
 .danger-btn:hover {
-  background: #fbdcd7;
+  background: #f7d9d5;
 }
 
 /* ---------- 专注计时（番茄钟） ---------- */
@@ -1401,7 +1442,7 @@ button.primary.small {
 }
 .agent-step.running { border-color: var(--brand); }
 .agent-step.done { opacity: 0.85; }
-.agent-step.failed { border-color: #c0392b; }
+.agent-step.failed { border-color: var(--danger); }
 .agent-step.waiting { border-color: #e67e22; }
 .agent-step-head {
   display: flex;
@@ -1435,7 +1476,7 @@ button.primary.small {
 .agent-log-line.tool { color: var(--brand-text); }
 .agent-log-line.reason { color: #2e7d32; }
 .agent-log-line.gate { color: #b9770e; }
-.agent-log-line.error { color: #c0392b; }
+.agent-log-line.error { color: var(--danger); }
 .agent-log-line.info { color: var(--text); }
 .agent-deliverable {
   margin: 8px 0 0;
@@ -1509,9 +1550,9 @@ button.primary.small {
   white-space: nowrap;
 }
 .tag-role {
-  background: #eef3ff;
-  border: 1px solid #c9d6f5;
-  color: #3a56b8;
+  background: var(--brand-soft);
+  border: 1px solid var(--brand-tint);
+  color: var(--brand-text);
 }
 
 /* 多智能体接力链（P3 可视化） */
@@ -1540,7 +1581,7 @@ button.primary.small {
 }
 .relay-chip.done { border-color: #7bbf8a; color: #2e7d32; }
 .relay-chip.running { border-color: var(--brand); color: var(--brand-text); }
-.relay-chip.failed { border-color: #c0392b; color: #c0392b; }
+.relay-chip.failed { border-color: var(--danger); color: var(--danger); }
 .relay-chip.waiting { border-color: #e67e22; color: #b9770e; }
 /* ============ 赛事版：正文可复制 ============ */
 body { user-select: text; -webkit-user-select: text; }
@@ -1556,9 +1597,9 @@ select { -webkit-user-select: none; user-select: none; }
 .law-chapter-head { margin: 18px 0 4px; font-size: 13px; font-weight: 600; color: var(--muted, #888); letter-spacing: 0.5px; }
 .law-article { border-bottom: 1px dashed rgba(128, 128, 128, 0.28); padding: 10px 0 6px; }
 .law-article.hit { background: #fff3bf; box-shadow: 0 0 0 6px #fff3bf; border-radius: 6px; }
-.law-art-no { font-weight: 700; font-size: 13.5px; color: var(--accent, #6d4aff); }
+.law-art-no { font-weight: 700; font-size: 13.5px; color: var(--brand); }
 .law-fulltext { white-space: pre-wrap; margin: 4px 0; line-height: 1.9; }
-.law-zh { color: var(--muted, #666); border-left: 3px solid #b9a7ff; padding-left: 10px; margin-top: 4px; }
+.law-zh { color: var(--muted, #666); border-left: 3px solid var(--brand-tint); padding-left: 10px; margin-top: 4px; }
 .zh-toggle { font-size: 12px; color: var(--muted, #666); display: inline-flex; gap: 6px; align-items: center; margin-top: 6px; cursor: pointer; }
 .law-jump .search-row { display: flex; gap: 8px; }
 
