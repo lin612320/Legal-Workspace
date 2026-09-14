@@ -10,7 +10,8 @@
     py -3 scripts/md2docx.py docs/Project-Plan-EN.md docs/Project-Plan-EN.docx
 
 支持：标题（#~####）、段落、无序/有序列表、表格（含表头分隔行）、引用块（>）、
-分隔线（---）、行内 **加粗** / `代码` / [链接](url) / <自动链接>、中文正文字体设置。
+分隔线（---）、行内 **加粗** / `代码` / [链接](url) / <自动链接>、中文正文字体设置、
+图片（独立成行的 `![说明](相对路径 "宽度如 2.4in / 6cm")`，路径相对 md 文件解析）。
 
 不追求完整 CommonMark：只覆盖本项目文档实际使用的语法子集，未知语法按段落原文输出。
 """
@@ -39,6 +40,10 @@ INLINE_RE = re.compile(
     r"|(\[[^\]]+\]\([^)]+\))"  # 链接
     r"|(<https?://[^>]+>)"  # 自动链接
 )
+
+# 独立成行的图片：![说明](相对路径 "可选宽度，如 2.4in / 6cm")
+IMG_RE = re.compile(r'^!\[(?P<alt>[^\]]*)\]\((?P<src>[^)\s]+)(?:\s+"(?P<size>[^"]*)")?\)$')
+DEFAULT_IMG_WIDTH_IN = 2.4
 
 
 def set_run_font(run, name: str) -> None:
@@ -122,6 +127,13 @@ def add_inline(paragraph, text: str, *, bold_all: bool = False, color=None, ital
         set_run_font(run, LATIN_FONT)
 
 
+def clean_heading_text(text: str) -> str:
+    """标题只保留纯文本：去掉链接语法与行内标记（Word 标题不使用行内样式）。"""
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+    text = text.replace("**", "").replace("`", "")
+    return text.strip()
+
+
 def add_hr(doc: Document) -> None:
     p = doc.add_paragraph()
     ppr = p._p.get_or_add_pPr()
@@ -171,6 +183,37 @@ def convert(md_path: Path, docx_path: Path) -> tuple[int, int]:
         line = lines[i]
         stripped = line.strip()
 
+        # 图片（独立成行）
+        m = IMG_RE.match(stripped)
+        if m:
+            src = m.group("src")
+            if re.match(r"^[a-z]+://", src):
+                add_inline(doc.add_paragraph(), f"[图片] {src}")
+            else:
+                img_path = (md_path.parent / src).resolve()
+                if not img_path.exists():
+                    add_inline(doc.add_paragraph(), f"[图片缺失：{src}]")
+                else:
+                    width_in = DEFAULT_IMG_WIDTH_IN
+                    size = (m.group("size") or "").strip()
+                    ms = re.match(r"^([\d.]+)\s*(in|cm|px)?$", size)
+                    if ms:
+                        val = float(ms.group(1))
+                        unit = (ms.group(2) or "in").lower()
+                        width_in = val if unit == "in" else (val / 2.54 if unit == "cm" else val / 96.0)
+                    pic_para = doc.add_paragraph()
+                    pic_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    pic_para.add_run().add_picture(str(img_path), width=Inches(width_in))
+                    if m.group("alt"):
+                        cap = doc.add_paragraph()
+                        cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                        run = cap.add_run(m.group("alt"))
+                        run.font.size = Pt(9)
+                        run.font.color.rgb = QUOTE_COLOR
+                        set_run_font(run, LATIN_FONT)
+            i += 1
+            continue
+
         # 表格
         if stripped.startswith("|") and i + 1 < len(lines) and is_sep_row(lines[i + 1]):
             rows = [split_row(stripped)]
@@ -187,7 +230,7 @@ def convert(md_path: Path, docx_path: Path) -> tuple[int, int]:
         m = re.match(r"^(#{1,4})\s+(.*)$", stripped)
         if m:
             level = len(m.group(1))
-            doc.add_heading(m.group(2).strip(), level=min(level, 4))
+            doc.add_heading(clean_heading_text(m.group(2)), level=min(level, 4))
             i += 1
             continue
 
