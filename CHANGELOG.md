@@ -2,6 +2,48 @@
 
 本项目的所有重要变更都会记录在此文件，格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，版本号遵循[语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [赛事版 0.7.2] - 2026-09-14（分支 `feature/赛事版`，相对 0.7.1）
+
+### 新增
+
+- **「自我进化」可视化页（应用内 `/evolution`，🚧 0.8.0 规划 · 方案稿）**：把 [docs/12](docs/12-联邦配方进化方案.md) 联邦配方进化（FRE）的闭环写成**可运行、可交互**的页面，而不是 PPT 图。
+  - 新增纯函数层 `src/lib/evolution.ts`：五类零标注奖励信号提取（`extractRewardSignals`，来自 `auditCitations` 的引用自检 / 计划卡偏离度 / 检索 0 命中 / 人工闸门 / 任务完成度）、计划卡偏离度 `extractPlanEditDiff`（落库 `plan_json` ↔ `fallbackPlan`）、白名单体检 `whitelistViolations`、拉普拉斯差分隐私 `applyDpNoise`、K 匿名 `kAnonymityFilter`、加权聚合 `aggregate`（权重 = 样本量 × 审计通过率 × 新鲜度衰减）、A/B 采纳判定 `evaluateAdoption`、收敛推演 `simulateConvergence`（内置可复现随机源 mulberry32）；
+  - 页面 `src/views/Evolution.tsx` + `src/components/Evolution.css`（作用域样式，复用设计令牌，深浅主题各一套系列色）：六个环节（本地信号 / 匿名进化包 / 隐私处理 / 加权聚合 / 配方版本 / A/B 采纳）点击切换，含 SVG 收敛曲线（未开 DP / ε=3 / ε=1 三条）、四指标迷你曲线、客户端权重条、配方基因对齐表、配方 manifest（版本 / 指纹 / 载荷体积 / 阈值）与本机进化日志；
+  - **真数据优先**：桌面版经 `task_list` + `task_get`（最近 8 条）读本机任务日志，折算真实进化包与实测基线锚点（曲线第 0 轮打「本机实测」标记），无数据时才走协议仿真并标注「数据源」；**每项信号读不到即显示"本机暂无"，不填假数**；
+  - 侧栏新增第 9 项「自我进化」，带 `方案稿` 角标（`NavItem.planned` + `.nav-item.planned` / `.nav-flag` 样式），并在 `title` 中写明"0.8.0 规划 · 方案稿可视化（未落地功能）"。
+- **产品演示站新增「自我进化实验室」板块**（`官网演示/index.html`，单文件零依赖、可离线双击）：同样的六环节切换 + 可调 ε / K / 轮次 + 收敛曲线，另有两处可**亲手验证**的交互：
+  - 「往进化包里塞一段案情原文（模拟违规）」开关 → 白名单体检立刻点名 `$.context` / `$.quality.result_ref` 并给出「拒绝上行」结论（体检逻辑与产品端同口径）；
+  - K 匿名下限拉到 20（生产口径）→ 样本量不足的桶整桶丢弃，直观看到"小样本宁可不聚合"的代价；
+  - 导航（`#navLinks` / 移动端菜单）与页脚新增 `#evolution` 入口。
+
+### 变更
+
+- **版本升至 0.7.2**（`package.json` / `src-tauri/tauri.conf.json` / `src-tauri/Cargo.toml`）；工程名 / exe / 进程 / 数据目录不变，升级不丢数据。
+- **悬浮球资源目录随版本递增为 `win-unpacked-0.7.2`**（`tauri.conf.json` resources 映射；源目录仍为 `floating-ball/dist-060/win-unpacked`）。这是覆盖安装的硬规则（0.3.1 / 0.3.2 / 0.7.1 均因沿用旧目录名踩过 `Error opening file for writing`），docs/04 同步。
+- `src/App.tsx` 新增路由 `/evolution`；`src/nav.ts` 的 `NavItem` 增加可选 `planned` 字段；`src/components/Sidebar.tsx` 据此渲染角标；`src/styles.css` 新增 `.nav-item.planned` / `.nav-flag`。
+- 文档口径同步：`README.md`（功能一览 8 → 9 项含方案稿页、目录结构补 `evolution`、文档索引补 docs/12、发布小节版本号）、`docs/README.md`、`docs/02-功能模块.md`、`docs/04-开发与构建指南.md`、`docs/11-赛事版改动说明.md`、`docs/12` 状态注、本文件。
+
+### 发布
+
+- **安装包**：`发布包/法元_0.7.2_赛事版_x64-setup.exe`（**135.11 MB**，2026-09-14 构建；内嵌 `legal_preload.db` **467.4 MB** 预置法库与悬浮球版本化目录 `win-unpacked-0.7.2`，主程序 `ProductVersion = 0.7.2`）。SHA256：`372F224DB756467F4986F6D402719CA061BBB0A955AE43EE7ED4E88C6E93C33B`。
+- **公开发布前置核验（只读，`sqlite3 -readonly`）**：预置库 `settings` / `documents` / `todos` / `chat_messages` 行数均为 **0**；`chat_sessions` 仅 1 行空会话（标题「新会话」、无消息）；`laws` **152,940** 条、`templates` 5 条且全为 `built_in=1`。用户真实库位于 `%APPDATA%\com.legalworkbench.app\legal.db`（1.37 GB），**不在打包资源内**。核验通过。
+- **质量闸门（出包前全绿）**：`npm run build`（tsc + vite build，exit 0）与 `cargo test`（**17/17 passed**，exit 0）。构建过程：78 modules transformed → release 编译 2m52s（LTO）→ NSIS 打包。
+- **演示站（已上线并校验）**：Cloudflare Pages 项目 `faron-demo`；生产域名 <https://faron-demo.pages.dev>（本次部署 <https://2a8e2ea9.faron-demo.pages.dev>）。线上校验：HTTP 200、正文 219,228 字符与本地源码一致、含 `#evolution` 板块与 `FaronDemo.evolution` 模块；`_headers`（`X-Content-Type-Options` / `Referrer-Policy` / `Cache-Control`）生效；未知路径返回 404。
+- **GitHub Releases**：tag `v0.7.2-赛事版`，资产 `Faron-0.7.2-x64-setup.exe`，<https://github.com/lin612320/Legal-Workspace/releases/tag/v0.7.2-赛事版>。
+
+### 说明（口径，务必同步维护）
+
+- **这不是强化学习**：奖励信号与 RL 的 reward 同构（且是代码规则算出来的零标注信号，强于问卷标注），但**没有策略梯度、没有价值函数、不做长程信用分配**——所谓"策略更新"就是加权统计平均 `θ ← θ + η·(聚合观测 − θ)`。页面与演示站都内置「若按强化学习看」逐项对照表，对外一律说「编排配方进化」，不说强化学习、不说联邦大模型权重。
+- **不进「已实现」清单**：`docs/12 §1.3` 红线不变。加权聚合 / 差分隐私 / K 匿名 / 指纹 / 采纳判定是**真实实现**；客户端（4–5 个虚拟律所用户）行为是**协议仿真**（`docs/12 §7.1` 既定演示路径）。0.7.2 安装包**已包含**该页（侧栏 9 项，第 9 项带「方案稿」角标），但它不改变 8 版块的功能口径。
+- 收敛曲线不是凭空画的：每轮各客户端独立观测 → 服务端按步长加权平均 → 独立噪声被"多轮 × 多客户"平均掉；差分隐私为维持固定预算每轮都要重新加噪，于是留下**噪声地板**（ε 越小平台越高）——即 `docs/12 §3.3` 约束 4「噪声与质量权衡」的可视化。噪声地板系数是**仿真参数，不是实测标定值**，页面已如实标注。
+
+### 验证
+
+- `npx tsc --noEmit` 通过；`npm run build`（tsc + vite build）通过：78 modules transformed，`dist/assets/index-*.js` 318.45 kB（gzip 116.57 kB）、CSS 33.64 kB（gzip 6.91 kB）。
+- 无头数值验证（临时脚本，验证后已删除，未入库）：收敛单调（产品端 d0 0.5417 → 末轮 0.2265；演示站 0.75 → 0.2711）、同种子可复现、隐私-质量权衡成立（ε=1 > ε=3 > 未开 = 0.2893 > 0.2343 > 0.2265）、白名单体检命中故意埋入的敏感字段、K 匿名按 K 丢弃样本不足的桶。
+- 页面服务端渲染冒烟：六个环节页签全部渲染成功、无运行时异常，RL 对照表常驻。
+- 演示站模块验证：整个内联脚本通过语法检查；模块在 DOM 桩（含事件派发与 innerHTML 换新元素语义）下加载，复现上述全部结论，采纳 / 回滚真的改状态并写入本机进化日志。
+
 ## [赛事版 0.7.1] - 2026-09-11（分支 `feature/赛事版`，相对 0.7.0）
 
 ### 修复

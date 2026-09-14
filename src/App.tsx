@@ -5,6 +5,7 @@ import Laws from "./views/Laws";
 import LawBrowse from "./views/LawBrowse";
 import Templates from "./views/Templates";
 import Agent from "./views/Agent";
+import Evolution from "./views/Evolution";
 import Translate from "./views/Translate";
 import Todo from "./views/Todo";
 import Settings from "./views/Settings";
@@ -21,6 +22,7 @@ export default function App() {
           <Route path="/law/:title" element={<LawBrowse />} />
           <Route path="/templates" element={<Templates />} />
           <Route path="/agent" element={<Agent />} />
+          <Route path="/evolution" element={<Evolution />} />
           <Route path="/translate" element={<Translate />} />
           <Route path="/todo" element={<Todo />} />
           <Route path="/settings" element={<Settings />} />

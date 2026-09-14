@@ -755,6 +755,83 @@ mark { background: rgba(216,178,106,.26); color: inherit; border-radius: 4px; pa
 }
 .bubble .acts .mini-link:hover { border-color: var(--accent); color: var(--accent); }
 
+/* ---------- 自我进化实验室 ---------- */
+.ev-flow { display: flex; gap: 6px; flex-wrap: wrap; }
+.ev-step {
+  flex: 1 1 142px; min-width: 126px; text-align: left; cursor: pointer;
+  border: 1px solid var(--border); border-radius: 12px; background: var(--surface);
+  padding: 9px 10px; transition: border-color .18s var(--ease), background .18s var(--ease);
+}
+.ev-step:hover { border-color: var(--border-strong); }
+.ev-step.on { border-color: var(--accent); background: var(--surface-2); }
+.ev-step .ix { font-size: 11px; color: var(--text-3); letter-spacing: 1px; }
+.ev-step .nm { display: block; margin: 2px 0 3px; font-size: 13.2px; font-weight: 620; color: var(--text); }
+.ev-step .ds { font-size: 11.4px; color: var(--text-3); line-height: 1.5; }
+
+.ev-chart { width: 100%; display: block; overflow: visible; }
+.ev-axis { stroke: var(--grid); stroke-width: 1; }
+.ev-tick { fill: var(--text-3); font-size: 9.5px; }
+.ev-axis-t { fill: var(--text-3); font-size: 10px; letter-spacing: .5px; }
+.ev-line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.ev-line.dash { stroke-dasharray: 5 4; }
+.ev-dot { stroke: var(--surface-solid); stroke-width: 1.4; }
+.ev-ring { fill: none; stroke: var(--red); stroke-width: 1.6; stroke-dasharray: 2 2; }
+.ev-legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 8px; font-size: 12px; color: var(--text-3); }
+.ev-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.ev-legend i { width: 15px; height: 3px; border-radius: 2px; display: inline-block; }
+
+.ev-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 13px; }
+.ev-metric { border: 1px solid var(--border); border-radius: 10px; background: var(--surface); padding: 8px 10px; }
+.ev-metric .mh { font-size: 11.2px; color: var(--text-3); display: flex; justify-content: space-between; gap: 8px; }
+.ev-metric .mv { font-size: 15.5px; font-weight: 650; color: var(--text); margin-top: 3px; }
+.ev-metric .md { font-size: 11px; margin-top: 2px; }
+.ev-good { color: var(--green); }
+.ev-bad { color: var(--red); }
+
+.ev-controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 4px 0 12px; font-size: 12.6px; color: var(--text-3); }
+.ev-controls label { display: inline-flex; align-items: center; gap: 6px; }
+.ev-controls select, .ev-controls input[type=range] {
+  font: inherit; color: var(--text); background: var(--surface-2);
+  border: 1px solid var(--border); border-radius: 8px; padding: 2px 6px;
+}
+.ev-controls input[type=range] { padding: 0; width: 108px; }
+.ev-controls .val { color: var(--text); font-variant-numeric: tabular-nums; }
+
+.ev-json {
+  margin: 0; max-height: 300px; overflow: auto; padding: 11px 13px;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--surface);
+  font-family: var(--mono); font-size: 11.4px; line-height: 1.62; color: var(--text-2); white-space: pre;
+}
+.ev-checks { display: flex; flex-direction: column; gap: 7px; margin-top: 11px; font-size: 12.6px; color: var(--text-2); }
+.ev-check { display: flex; gap: 8px; align-items: baseline; }
+.ev-check b { color: var(--text); font-weight: 620; }
+.ev-check .ico { flex: 0 0 auto; }
+.ev-check.dirty { color: var(--red); }
+.ev-check.ok { color: var(--green); }
+
+.ev-table { width: 100%; border-collapse: collapse; font-size: 12.4px; }
+.ev-table th, .ev-table td { text-align: left; padding: 6px 9px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.ev-table th { color: var(--text-3); font-weight: 600; font-size: 11.4px; }
+.ev-table tr:last-child td { border-bottom: 0; }
+
+.ev-tag { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px; white-space: nowrap; }
+.ev-tag.same { background: var(--ok-bg); color: var(--green); }
+.ev-tag.part { background: rgba(216,178,106,.14); color: var(--gold); }
+.ev-tag.none { background: var(--bad-bg); color: var(--red); }
+
+.ev-decision { border-radius: 11px; padding: 11px 13px; font-size: 12.8px; line-height: 1.75; }
+.ev-decision.adopt { background: var(--ok-bg); color: var(--green); }
+.ev-decision.hold { background: rgba(216,178,106,.14); color: var(--gold); }
+.ev-decision ul { margin: 6px 0 0; padding-left: 17px; list-style: disc; }
+
+.ev-kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; font-size: 12.4px; }
+.ev-kv dt { color: var(--text-3); white-space: nowrap; }
+.ev-kv dd { margin: 0; color: var(--text-2); word-break: break-all; }
+.ev-mono { font-family: var(--mono); font-size: 11.6px; }
+
+@media (max-width: 1080px) { .ev-metrics { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px) { .ev-metrics { grid-template-columns: 1fr; } }
+
 /* ---------- 响应式 ---------- */
 @media (max-width: 1080px) {
   .tasks { grid-template-columns: repeat(2, 1fr); }
@@ -807,6 +884,7 @@ mark { background: rgba(216,178,106,.26); color: inherit; border-radius: 4px; pa
       <a href="#runbook">智能体演练</a>
       <a href="#audit">引用自检</a>
       <a href="#kg">知识图谱</a>
+      <a href="#evolution">自我进化</a>
       <a href="#faq">常见问题</a>
     </nav>
     <div class="nav-actions">
@@ -832,6 +910,7 @@ mark { background: rgba(216,178,106,.26); color: inherit; border-radius: 4px; pa
     <a href="#audit">引用自检实验室</a>
     <a href="#compare">差异对比</a>
     <a href="#kg">知识图谱</a>
+    <a href="#evolution">自我进化实验室（0.8.0 方案稿）</a>
     <a href="#tasks">5 类任务</a>
     <a href="#stack">技术底座</a>
     <a href="#download">下载</a>
@@ -1568,6 +1647,132 @@ mark { background: rgba(216,178,106,.26); color: inherit; border-radius: 4px; pa
   </div>
 </section>
 
+<!-- ===================== 自我进化实验室 ===================== -->
+<section id="evolution">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="eyebrow">0.8.0 规划 · 方案稿（未落地）</div>
+      <h2 class="title">智能体怎么<span class="gold">自己变好</span>？把闭环跑给你看</h2>
+      <p class="lede">
+        不上传你的案子，只上传<strong>"大家怎么把案子做好"</strong>的匿名配方：本地日志 → 匿名进化包 →
+        差分隐私与 K 匿名 → 加权聚合 → 签名配方 → A/B 采纳。
+        下面这台实验台<strong>可以亲手调参数</strong>，看配方怎么一轮轮逼近好实践。
+      </p>
+    </div>
+
+    <div class="card reveal" style="margin-bottom:16px">
+      <div class="pane-b">
+        <div class="ev-flow" id="evFlow" role="tablist" aria-label="自我进化闭环环节">
+          <button class="ev-step on" type="button" data-step="signal">
+            <span class="ix">①</span><span class="nm">本地信号</span>
+            <span class="ds">引用自检 + 计划卡偏离 + 闸门，零标注奖励</span>
+          </button>
+          <button class="ev-step" type="button" data-step="pack">
+            <span class="ix">②</span><span class="nm">匿名进化包</span>
+            <span class="ds">白名单字段，KB 级，原文零上云</span>
+          </button>
+          <button class="ev-step" type="button" data-step="privacy">
+            <span class="ix">③</span><span class="nm">隐私处理</span>
+            <span class="ds">差分隐私加噪 → 不足 K 人整桶丢弃</span>
+          </button>
+          <button class="ev-step" type="button" data-step="agg">
+            <span class="ix">④</span><span class="nm">加权聚合</span>
+            <span class="ds">样本量 × 审计通过率 × 新鲜度</span>
+          </button>
+          <button class="ev-step" type="button" data-step="ab">
+            <span class="ix">⑤</span><span class="nm">A/B 采纳</span>
+            <span class="ds">Shadow 试运行 → 无回退才采纳</span>
+          </button>
+        </div>
+        <p class="hint-inline" style="margin-top:12px">
+          口径诚实说明：<strong>加权聚合、差分隐私、K 匿名、指纹与采纳判定是真实实现</strong>；
+          客户端行为为协议仿真（本页没有你的任务日志，桌面版会读真实的 tasks / task_steps）；
+          <strong>这不是强化学习</strong>——奖励只参与加权，没有策略梯度与价值函数，详见下方对照表。
+        </p>
+      </div>
+    </div>
+
+    <div class="lab">
+      <div class="card reveal">
+        <div class="pane-h">聚合控制台<span class="pill" id="evPill">协议仿真</span></div>
+        <div class="pane-b">
+          <div class="ev-controls">
+            <label>差分隐私 ε
+              <select id="evEps" aria-label="差分隐私预算">
+                <option value="off">关闭</option>
+                <option value="3" selected>3（较松）</option>
+                <option value="1">1（较严）</option>
+              </select>
+            </label>
+            <label>K 匿名下限
+              <input type="range" id="evK" min="1" max="20" value="2" aria-label="K 匿名下限" />
+              <span class="val" id="evKVal">2</span>
+            </label>
+            <label>聚合轮次
+              <input type="range" id="evRounds" min="1" max="12" value="12" aria-label="聚合轮次" />
+              <span class="val" id="evRoundsVal">12</span>
+            </label>
+          </div>
+          <div id="evChart"></div>
+          <div class="ev-legend">
+            <span><i style="background:var(--green)"></i>未开差分隐私</span>
+            <span><i style="background:var(--blue)"></i>DP ε=3</span>
+            <span><i style="background:var(--gold)"></i>DP ε=1</span>
+            <span><i style="background:var(--red)"></i>◎ 本机实测基线（桌面版）</span>
+          </div>
+          <div class="ev-metrics" id="evMetrics"></div>
+          <p class="hint-inline" style="margin-top:12px">
+            每轮四个"律所用户"各自独立观测，聚合端按权重做平均（θ ← θ + η·(聚合观测 − θ)）；
+            独立噪声被多轮多客户平均掉，而差分隐私为维持固定预算每轮都要重新加噪，于是留下一个<strong>噪声地板</strong>——
+            ε 越小，平台越高。
+          </p>
+        </div>
+      </div>
+
+      <div class="card reveal">
+        <div class="pane-h">环节详情<span class="pill" id="evPill2">① 本地信号</span></div>
+        <div class="pane-b" id="evPanel"></div>
+      </div>
+    </div>
+
+    <div class="card reveal" style="margin-top:16px">
+      <div class="pane-h">如果按强化学习看：逐项对照<span class="pill">结论：不是 RL</span></div>
+      <div class="pane-b">
+        <table class="ev-table">
+          <thead>
+            <tr><th>RL 概念</th><th>法元 · 联邦配方进化</th><th>是否同构</th><th>说明</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>轨迹 rollout</td><td>一次任务（tasks / task_steps 全量落库）</td>
+              <td><span class="ev-tag part">部分</span></td>
+              <td class="muted">任务是真实发生的，但不是策略采样出来的轨迹——没有动作空间与状态转移。</td></tr>
+            <tr><td>奖励 reward</td><td>确定性引用自检 + 计划卡编辑 diff + 闸门放行</td>
+              <td><span class="ev-tag same">同构</span></td>
+              <td class="muted">最像 RL 的地方，也是最强的地方：奖励由代码规则算出、零标注。</td></tr>
+            <tr><td>策略 policy</td><td>编排配方（计划卡模板 / 检索词典 / 质检阈值）</td>
+              <td><span class="ev-tag part">部分</span></td>
+              <td class="muted">配方确实在决定"下一步做什么"，但它是结构化资产，不是可微的策略网络。</td></tr>
+            <tr><td>策略更新</td><td>加权 FedAvg 聚合（样本量 × 审计通过率 × 新鲜度）</td>
+              <td><span class="ev-tag part">部分</span></td>
+              <td class="muted">是<strong>统计平均</strong>，不是梯度下降：没有优势函数、没有反向传播。</td></tr>
+            <tr><td>探索 exploration</td><td>A/B Shadow 试运行 + 差分隐私噪声</td>
+              <td><span class="ev-tag part">部分</span></td>
+              <td class="muted">Shadow 等效于一次保守的策略探索；DP 噪声是隐私副产品，不是刻意探索。</td></tr>
+            <tr><td>价值函数 / 折扣回报</td><td>无</td>
+              <td><span class="ev-tag none">没有</span></td>
+              <td class="muted">不做长程信用分配——只回答"这一步该不该留在默认流水线"。</td></tr>
+          </tbody>
+        </table>
+        <p class="hint-inline" style="margin-top:12px">
+          一句话结论：法元的自我优化是<strong>联邦统计聚合 + 零标注奖励加权</strong>。奖励信号与 RL 同构（且比问卷标注更硬），
+          但没有策略梯度、没有价值函数、不做长程信用分配。对外一律说"编排配方进化"，不说"强化学习"，
+          也不说"联邦大模型权重"——模型走 API，本地根本没有权重可联邦。
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- ===================== 5 类任务 ===================== -->
 <section id="tasks">
   <div class="wrap">
@@ -1770,6 +1975,7 @@ mark { background: rgba(216,178,106,.26); color: inherit; border-radius: 4px; pa
         <a href="#ball">悬浮球划词</a>
         <a href="#audit">引用自检</a>
         <a href="#kg">知识图谱</a>
+        <a href="#evolution">自我进化</a>
         <a href="#download">下载</a>
         <a href="#faq">常见问题</a>
       </div>
@@ -3664,6 +3870,433 @@ mark { background: rgba(216,178,106,.26); color: inherit; border-radius: 4px; pa
     }
   };
   FaronDemo.ballDemo = ballDemo;
+
+  /* ===================== 自我进化实验室（0.8.0 规划 · 方案稿演示） =====================
+     口径：聚合 / 差分隐私 / K 匿名 / 白名单体检 / A/B 判定为真实实现；
+     客户端（4 个虚拟律所用户）行为为协议仿真。不是强化学习——见对照表。 */
+  (function evolutionLab() {
+    var flow = document.getElementById("evFlow");
+    var chartBox = document.getElementById("evChart");
+    if (!flow || !chartBox) return;
+
+    /* ---------- 配方基因：候选步骤（t=1 好实践应包含，d=1 默认骨架已有） ---------- */
+    var GENES = [
+      { k: "合同审查", n: "合同分段与要点梳理", t: 1, d: 1 },
+      { k: "合同审查", n: "逐条风险与修改建议", t: 1, d: 1 },
+      { k: "合同审查", n: "风险条款排序（高→低）", t: 1, d: 0 },
+      { k: "合同审查", n: "修改建议对照表", t: 1, d: 0 },
+      { k: "合同审查", n: "通用免责套话", t: 0, d: 1 },
+      { k: "证据目录", n: "整理证据目录与证明目的", t: 1, d: 1 },
+      { k: "证据目录", n: "按要件分组编号", t: 1, d: 0 },
+      { k: "证据目录", n: "交付为原生表格", t: 1, d: 0 },
+      { k: "起诉状", n: "管辖与诉讼费核算", t: 1, d: 0 },
+      { k: "起诉状", n: "空泛法理铺陈", t: 0, d: 1 },
+      { k: "质证意见", n: "逐份证据三性意见", t: 1, d: 0 },
+      { k: "质证意见", n: "对证据来源作主观推测", t: 0, d: 1 }
+    ];
+
+    /* ---------- 仿真客户端：4 个虚拟律所用户 ---------- */
+    var FIRMS = [
+      { id: "firm-a", name: "甲所 · 涉日合规", kinds: ["合同审查", "质证意见"], n: 46, q: 0.95, bias: 0.18, sigma: 0.42 },
+      { id: "firm-b", name: "乙所 · 涉外诉讼", kinds: ["起诉状", "证据目录"], n: 38, q: 0.92, bias: 0.24, sigma: 0.48 },
+      { id: "firm-c", name: "丙所 · 出口管制", kinds: ["合同审查", "质证意见"], n: 22, q: 0.86, bias: 0.3, sigma: 0.6 },
+      { id: "firm-d", name: "丁所 · 新入行独立律师", kinds: ["起诉状", "证据目录", "合同审查"], n: 6, q: 0.78, bias: 0.36, sigma: 0.7 }
+    ];
+
+    var TOTAL = 12;
+    var ETA = 0.4;
+    var BASE = { edit: 3.1, audit: 0.72, lex: 0.34, tools: 6.4 };
+
+    function mulberry32(a) {
+      return function () {
+        a = (a + 0x6d2b79f5) >>> 0;
+        var t = a;
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+    function gauss(rng) {
+      var u1 = Math.max(rng(), 1e-9), u2 = rng();
+      return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+    }
+    function laplace(rng, scale) {
+      var u = rng() - 0.5, s = u < 0 ? -1 : 1;
+      return -scale * s * Math.log(1 - 2 * Math.abs(u));
+    }
+    function weightOf(f) { return f.n * (0.2 + 0.8 * f.q); }
+    function defaultDist() {
+      var s = 0;
+      for (var i = 0; i < GENES.length; i++) s += Math.abs((GENES[i].d ? 1 : 0) - GENES[i].t);
+      return s / GENES.length;
+    }
+
+    /** 聚合推演：返回每轮指标 + 末轮配方（权重公式与聚合步长同产品实现） */
+    function simulate(rounds, eps) {
+      var rng = mulberry32(20260908);
+      var d0 = defaultDist();
+      var theta = GENES.map(function (g) { return g.d ? 1 : 0; });
+      var ws = FIRMS.map(weightOf);
+      var wsum = ws.reduce(function (s, w) { return s + w; }, 0) || 1;
+      var dpFloor = eps ? 0.18 / eps : 0;
+      var out = [{ r: 0, dist: d0, edit: BASE.edit, audit: BASE.audit, lex: BASE.lex, tools: BASE.tools }];
+      for (var r = 1; r <= rounds; r++) {
+        var agg = [];
+        var i, j;
+        for (i = 0; i < GENES.length; i++) agg.push(0);
+        for (var fi = 0; fi < FIRMS.length; fi++) {
+          var f = FIRMS[fi], w = ws[fi] / wsum;
+          for (i = 0; i < GENES.length; i++) {
+            var g = GENES[i];
+            var touched = f.kinds.indexOf(g.k) >= 0 ? 1 : 0.35;
+            var obs = g.t * touched + (1 - touched) * (g.d ? 1 : 0) +
+              f.bias * (g.t === 1 ? 1 : -1) * 0.3 + gauss(rng) * f.sigma * 0.5;
+            agg[i] += w * Math.max(0, Math.min(1, obs));
+          }
+        }
+        for (j = 0; j < GENES.length; j++) theta[j] += ETA * (agg[j] - theta[j]);
+        var dRaw = 0;
+        for (j = 0; j < GENES.length; j++) dRaw += Math.abs(theta[j] - GENES[j].t);
+        dRaw /= GENES.length;
+        var d = Math.sqrt(dRaw * dRaw + dpFloor * dpFloor);
+        var p = Math.max(0, Math.min(1, 1 - d / d0));
+        out.push({
+          r: r, dist: d,
+          edit: BASE.edit * (0.35 + 0.65 * (1 - p)),
+          audit: BASE.audit + (0.985 - BASE.audit) * p,
+          lex: BASE.lex * (1 - 0.8 * p),
+          tools: BASE.tools - 1.9 * p
+        });
+      }
+      return { rounds: out, recipe: theta, d0: d0 };
+    }
+
+    var SIM = { off: simulate(TOTAL, null), e3: simulate(TOTAL, 3), e1: simulate(TOTAL, 1) };
+    var state = { step: "signal", eps: "3", k: 2, rounds: TOTAL, ab: "pending", dirty: false };
+    var journal = [];
+
+    /* ---------- 白名单体检（与产品 src/lib/evolution.ts 同口径） ---------- */
+    var FORBIDDEN = ["context", "content", "content_zh", "title", "title_zh", "result",
+      "result_ref", "excerpt", "prompt", "note", "file_path", "api_key", "apiKey", "key", "text"];
+    function violations(v, path) {
+      var bad = [];
+      (function walk(o, p) {
+        if (Array.isArray(o)) { o.forEach(function (it, i) { walk(it, p + "[" + i + "]"); }); return; }
+        if (!o || typeof o !== "object") return;
+        Object.keys(o).forEach(function (k) {
+          var np = p + "." + k;
+          if (FORBIDDEN.indexOf(k) >= 0) bad.push(np);
+          walk(o[k], np);
+        });
+      })(v, path || "$");
+      return bad;
+    }
+
+    /** 一份示例进化包（干净版）；点开关会真的往里面塞原文，用来演示体检拦截 */
+    function samplePackage(dirty) {
+      var pkg = {
+        schema: "fre.evolution-package/v1",
+        client: "firm-a",
+        bucket: { task_kind: "合同审查", country: "日本", lang: "zh" },
+        sample_n: 46,
+        plan_edit: {
+          default_steps_removed: { "风险条款排序（高→低）": 3, "通用免责套话": 2 },
+          added_tool_sequence: [["laws_search", "law_by_id"], 7],
+          avg_edit_steps: 1.8
+        },
+        lexicon: { zero_hit_keywords: { "遺留分": 4 }, good_keywords: { "契約": 31 } },
+        quality: { audit_pass_ratio: 0.95, unmatched_tokens: { "第9999条": 1 } },
+        memory_prototype: [0.012, -0.031, 0.008],
+        dp: { mechanism: "laplace", epsilon: 3, applied: true }
+      };
+      if (dirty) {
+        pkg.context = "本案系涉外合资经营合同纠纷，日方逾期未出资……";
+        pkg.quality.result_ref = "《合同审查意见书》正文节选……";
+      }
+      return pkg;
+    }
+
+    /* ---------- 渲染：收敛曲线 ---------- */
+    var CW = 660, CH = 214, PAD = { l: 44, r: 14, t: 12, b: 26 };
+    function renderChart() {
+      var rounds = state.rounds;
+      var series = [
+        { key: "off", color: "var(--green)", dash: "", vals: SIM.off.rounds.slice(0, rounds + 1).map(function (x) { return x.dist; }) },
+        { key: "e3", color: "var(--blue)", dash: " dash", vals: SIM.e3.rounds.slice(0, rounds + 1).map(function (x) { return x.dist; }) },
+        { key: "e1", color: "var(--gold)", dash: " dash", vals: SIM.e1.rounds.slice(0, rounds + 1).map(function (x) { return x.dist; }) }
+      ];
+      var all = series[0].vals.concat(series[1].vals, series[2].vals);
+      var lo = Math.min.apply(null, all), hi = Math.max.apply(null, all);
+      var pad = (hi - lo) * 0.12 || 0.05;
+      lo -= pad; hi += pad;
+      var pw = CW - PAD.l - PAD.r, ph = CH - PAD.t - PAD.b;
+      function X(i) { return PAD.l + (rounds > 0 ? (i / rounds) * pw : 0); }
+      function Y(v) { return PAD.t + (1 - (v - lo) / (hi - lo)) * ph; }
+      var out = ['<svg class="ev-chart" viewBox="0 0 ' + CW + " " + CH + '" height="' + CH + '" role="img" aria-label="配方与好实践的距离随聚合轮次下降的收敛曲线">'];
+      for (var t = 0; t <= 4; t++) {
+        var v = lo + (t / 4) * (hi - lo);
+        out.push('<line class="ev-axis" x1="' + PAD.l + '" x2="' + (CW - PAD.r) + '" y1="' + Y(v).toFixed(1) + '" y2="' + Y(v).toFixed(1) + '"/>');
+        out.push('<text class="ev-tick" x="' + (PAD.l - 6) + '" y="' + (Y(v) + 3).toFixed(1) + '" text-anchor="end">' + v.toFixed(2) + "</text>");
+      }
+      out.push('<text class="ev-axis-t" x="' + PAD.l + '" y="9">与好实践的距离（越低越好）</text>');
+      [0, Math.round(rounds / 2), rounds].filter(function (v2, i, a) { return a.indexOf(v2) === i; }).forEach(function (i2) {
+        out.push('<text class="ev-tick" x="' + X(i2).toFixed(1) + '" y="' + (CH - 8) + '" text-anchor="middle">' + (i2 === 0 ? "基线" : "第 " + i2 + " 轮") + "</text>");
+      });
+      series.forEach(function (s) {
+        var d = s.vals.map(function (v2, i2) { return (i2 === 0 ? "M" : "L") + X(i2).toFixed(1) + "," + Y(v2).toFixed(1); }).join(" ");
+        out.push('<path class="ev-line' + s.dash + '" d="' + d + '" stroke="' + s.color + '"/>');
+        var last = s.vals.length - 1;
+        out.push('<circle class="ev-dot" cx="' + X(last).toFixed(1) + '" cy="' + Y(s.vals[last]).toFixed(1) + '" r="3" fill="' + s.color + '"/>');
+      });
+      // 本机实测基线锚点：桌面版用真实任务日志算出起点，这里用同一位置的示意锚点
+      out.push('<circle class="ev-ring" cx="' + X(0).toFixed(1) + '" cy="' + Y(series[0].vals[0]).toFixed(1) + '" r="5.5"/>');
+      out.push("</svg>");
+      chartBox.innerHTML = out.join("");
+    }
+
+    /* ---------- 渲染：四个指标读数 ---------- */
+    function activeSeries() {
+      return state.eps === "off" ? SIM.off : state.eps === "1" ? SIM.e1 : SIM.e3;
+    }
+    function renderMetrics() {
+      var s = activeSeries().rounds;
+      var a = s[0], b = s[state.rounds];
+      var defs = [
+        { k: "edit", name: "计划卡编辑率", up: false, fmt: function (v) { return v.toFixed(2) + " 步/任务"; } },
+        { k: "audit", name: "引用自检通过率", up: true, fmt: function (v) { return (v * 100).toFixed(1) + "%"; } },
+        { k: "lex", name: "检索词未登记率", up: false, fmt: function (v) { return (v * 100).toFixed(1) + "%"; } },
+        { k: "tools", name: "平均工具轮数", up: true, fmt: function (v) { return v.toFixed(2) + " 轮"; } }
+      ];
+      var html = "";
+      defs.forEach(function (d) {
+        var v0 = a[d.k], v1 = b[d.k];
+        var better = d.up ? v1 > v0 : v1 < v0;
+        var pct = v0 > 0 ? Math.abs((v1 - v0) / v0) * 100 : 0;
+        html += '<div class="ev-metric"><div class="mh"><span>' + d.name + "</span><span>" + (d.up ? "↑ 越好" : "↓ 越好") + "</span></div>" +
+          '<div class="mv">' + d.fmt(v1) + "</div>" +
+          '<div class="md ' + (better ? "ev-good" : "ev-bad") + '">' + (better ? "▼" : "▲") + " " + pct.toFixed(1) + "% vs 基线</div></div>";
+      });
+      document.getElementById("evMetrics").innerHTML = html;
+    }
+
+    /* ---------- 渲染：环节详情面板 ---------- */
+    function signalPanel() {
+      var s = activeSeries().rounds;
+      var rows = [
+        ["计划卡偏离默认骨架", s[0].edit.toFixed(2) + " 步/任务", "tasks.plan_json ↔ fallbackPlan"],
+        ["引用自检通过率", (s[0].audit * 100).toFixed(1) + "%", "auditCitations → task_steps.result_ref"],
+        ["检索 0 命中词", "1 个（遺留分）", "laws_search → result_ref"],
+        ["人工确认闸门", "2 / 3 已放行", "task_steps.need_confirm"],
+        ["任务完成率", "88%（22 完成 / 3 失败）", "tasks.status"]
+      ];
+      var html = '<p class="hint-inline" style="margin-bottom:11px">五类<strong>零标注奖励信号</strong>：全部从既有任务日志算出，不需要用户填任何问卷。' +
+        '<br /><span class="muted">本页没有你的任务日志，以下为协议仿真示例；桌面版读真实 tasks / task_steps，读不到就如实显示"本机暂无"。</span></p>' +
+        '<table class="ev-table"><thead><tr><th>奖励信号</th><th>当前值</th><th>代码来源</th></tr></thead><tbody>';
+      rows.forEach(function (r) {
+        html += "<tr><td>" + r[0] + '</td><td><strong>' + r[1] + "</strong></td><td class='muted' style='font-family:var(--mono);font-size:11.4px'>" + r[2] + "</td></tr>";
+      });
+      html += "</tbody></table><p class='hint-inline' style='margin-top:11px'>" +
+        "这是本方案区别于「云端收集反馈再 RLHF」的地方：标签是<strong>代码规则算出来的</strong>，不是模型自述、也不是用户问卷。</p>";
+      return html;
+    }
+
+    function packPanel() {
+      var pkg = samplePackage(state.dirty);
+      var bad = violations(pkg);
+      var html = '<p class="hint-inline" style="margin-bottom:11px">上云的<strong>唯一载荷</strong>：KB 级白名单统计与配方向量。' +
+        '试试把开关打开，往包里塞一段案情原文——体检会立刻抓出来。</p>' +
+        '<label class="switch" style="margin-bottom:11px"><input type="checkbox" id="evDirty"' + (state.dirty ? " checked" : "") +
+        ' /><span class="track"></span><span>往进化包里塞一段案情原文（模拟违规）</span></label>' +
+        '<pre class="ev-json">' + JSON.stringify(pkg, null, 2).replace(/</g, "&lt;") + "</pre>" +
+        '<div class="ev-checks"><div class="ev-check ' + (bad.length ? "dirty" : "ok") + '">' +
+        '<span class="ico">' + (bad.length ? "⛔" : "✅") + "</span><span>" +
+        (bad.length
+          ? "命中 " + bad.length + " 个禁止字段：<b>" + bad.map(function (x) { return x; }).join("、") + "</b> → 该包会被 schema 白名单拦截，拒绝上行"
+          : "敏感字段体检通过：无 context / content / title / result / file_path / api_key 等字段") +
+        "</span></div>" +
+        '<div class="ev-check"><span class="ico">📦</span><span>包体积约 ' + Math.round(JSON.stringify(pkg).length / 102.4) / 10 + " KB（KB 级载荷，不是模型权重）</span></div>" +
+        '<div class="ev-check"><span class="ico">🔒</span><span>差分隐私：拉普拉斯加噪（ε=' + (state.eps === "off" ? "关闭" : state.eps) + "），计数类字段单条记录不可还原</span></div>" +
+        "</div>";
+      return html;
+    }
+
+    function privacyPanel() {
+      var eps = state.eps === "off" ? 0 : parseFloat(state.eps);
+      var rng = mulberry32(7);
+      var raw = { "遺留分": 4, "出口管制条例": 2 };
+      var noisy = {};
+      Object.keys(raw).forEach(function (kk) {
+        var v = raw[kk] + (eps ? laplace(rng, 1 / eps) : 0);
+        noisy[kk] = Math.max(0, Math.round(v));
+      });
+      var html = '<p class="hint-inline" style="margin-bottom:11px">三层机制：<strong>数据最小化 + 差分隐私 + 最小匿名集合</strong>。默认关闭，关掉后核心链路离线照常。</p>' +
+        '<table class="ev-table"><thead><tr><th>检索词（0 命中）</th><th>本地真实计数</th><th>上行载荷（加噪后）</th></tr></thead><tbody>';
+      Object.keys(raw).forEach(function (kk) {
+        html += "<tr><td>" + kk + "</td><td>" + raw[kk] + "</td><td><strong>" + noisy[kk] + "</strong></td></tr>";
+      });
+      html += "</tbody></table>" +
+        '<p class="hint-inline" style="margin:11px 0">把上方的 ε 调小（更严），加噪幅度会变大——这就是<strong>隐私-质量权衡</strong>：ε 越小，收敛曲线的平台越高。</p>' +
+        '<table class="ev-table"><thead><tr><th>匿名桶</th><th>样本量</th><th>K 匿名判定</th></tr></thead><tbody>';
+      FIRMS.forEach(function (f) {
+        var dropped = f.n < state.k;
+        html += "<tr><td>" + f.name + "</td><td>" + f.n + '</td><td><span class="ev-tag ' + (dropped ? "none" : "same") + '">' +
+          (dropped ? "丢弃（< K）" : "保留") + "</span></td></tr>";
+      });
+      html += "</tbody></table><p class='hint-inline' style='margin-top:11px'>当前 K = " + state.k +
+        "：保留 " + FIRMS.filter(function (f) { return f.n >= state.k; }).length + " 桶、丢弃 " +
+        FIRMS.filter(function (f) { return f.n < state.k; }).length +
+        " 桶。把 K 拉到 20（生产口径），样本量不足的桶会被整桶丢掉——本例只剩样本最多的几个所还能上行。这不是 bug，正是「小样本宁可不聚合」的代价。</p>";
+      return html;
+    }
+
+    function abPanel() {
+      var s = activeSeries().rounds;
+      var a = s[0], b = s[state.rounds];
+      var improved = [], regressed = [];
+      function cmp(name, v0, v1, up) {
+        var good = up ? v1 > v0 : v1 < v0;
+        var back = up ? v1 < v0 * 0.95 : v1 > v0 * 1.05;
+        if (good) improved.push(name);
+        if (back) regressed.push(name);
+      }
+      cmp("计划卡编辑率", a.edit, b.edit, false);
+      cmp("引用自检通过率", a.audit, b.audit, true);
+      cmp("检索词未登记率", a.lex, b.lex, false);
+      cmp("平均工具轮数", a.tools, b.tools, false);
+      var adopt = regressed.length === 0 && improved.length >= 2;
+      var html = '<div class="ev-decision ' + (adopt ? "adopt" : "hold") + '"><strong>' +
+        (adopt ? "✅ 建议采纳配方 v" + state.rounds : "⏸ 暂不采纳（继续 Shadow 观察）") + "</strong><ul>" +
+        (regressed.length ? "<li>存在显著回退（容忍度 5%）：" + regressed.join("、") + "</li>" : "") +
+        (improved.length < 2 ? "<li>同向改善的指标不足 2 项（当前 " + improved.length + " 项）</li>" : "") +
+        (adopt ? "<li>多数指标同向改善（" + improved.join("、") + "）且无显著回退 → 采纳并写入本机进化日志</li>" : "") +
+        "</ul></div>" +
+        '<table class="ev-table" style="margin-top:12px"><thead><tr><th>指标</th><th>基线（默认骨架）</th><th>第 ' + state.rounds + " 轮配方</th></tr></thead><tbody>" +
+        "<tr><td>计划卡编辑率 ↓</td><td>" + a.edit.toFixed(2) + " 步/任务</td><td><strong>" + b.edit.toFixed(2) + " 步/任务</strong></td></tr>" +
+        "<tr><td>引用自检通过率 ↑</td><td>" + (a.audit * 100).toFixed(1) + "%</td><td><strong>" + (b.audit * 100).toFixed(1) + "%</strong></td></tr>" +
+        "<tr><td>检索词未登记率 ↓</td><td>" + (a.lex * 100).toFixed(1) + "%</td><td><strong>" + (b.lex * 100).toFixed(1) + "%</strong></td></tr>" +
+        "<tr><td>平均工具轮数 ↓</td><td>" + a.tools.toFixed(2) + " 轮</td><td><strong>" + b.tools.toFixed(2) + " 轮</strong></td></tr>" +
+        "</tbody></table>" +
+        '<div class="controls" style="margin-top:12px">' +
+        '<button class="btn btn-primary btn-sm" type="button" id="evAdopt"' + (adopt && state.ab !== "adopted" ? "" : " disabled") + ">✓ 采纳配方 v" + state.rounds + "</button>" +
+        '<button class="btn btn-sm" type="button" id="evRollback"' + (state.ab !== "rolled" ? "" : " disabled") + ">↺ 回滚到上一版</button>" +
+        "</div>" +
+        '<p class="hint-inline" style="margin-top:11px">当前状态：<strong>' +
+        (state.ab === "pending" ? "待人工决策（新配方已下载但未生效）" : state.ab === "adopted" ? "已采纳（本机生效）" : "已回滚（保留最近 2 个版本）") +
+        "</strong>。任何一步异常即回退，用户可在设置页一键停用进化并清除已下载配方。</p>" +
+        '<div class="log" id="evJournal" style="margin-top:12px">' +
+        (journal.length ? journal.map(function (j) { return "<div><i>进化日志</i> " + j + "</div>"; }).join("") :
+          "<div><i>进化日志</i> 还没有采纳 / 回滚记录，点上面的按钮试试</div>") +
+        "</div>";
+      return html;
+    }
+
+    var PANELS = { signal: signalPanel, pack: packPanel, privacy: privacyPanel, ab: abPanel };
+    var STEP_NAMES = { signal: "① 本地信号", pack: "② 匿名进化包", privacy: "③ 隐私处理", agg: "④ 加权聚合", ab: "⑤ A/B 采纳" };
+
+    function renderPanel() {
+      document.getElementById("evPill2").textContent = STEP_NAMES[state.step];
+      var el = document.getElementById("evPanel");
+      if (state.step === "agg") {
+        el.innerHTML = '<p class="hint-inline">左侧就是本环节的可视化：调 ε、调 K、推进轮次，看配方怎么逼近好实践。' +
+          "<br /><span class='muted'>聚合是<strong>加权统计平均</strong>（θ ← θ + η·(聚合观测 − θ)），不是梯度下降；" +
+          "权重 = 样本量 × 审计通过率 × 新鲜度衰减，质量低的客户端说话更轻。</span></p>" +
+          '<table class="ev-table" style="margin-top:11px"><thead><tr><th>虚拟律所用户</th><th>样本量</th><th>审计通过率</th><th>聚合权重占比</th></tr></thead><tbody>' +
+          (function () {
+            var ws = FIRMS.map(weightOf);
+            var tot = ws.reduce(function (x, y) { return x + y; }, 0);
+            return FIRMS.map(function (f, i) {
+              return "<tr><td>" + f.name + "</td><td>" + f.n + "</td><td>" + (f.q * 100).toFixed(0) + "%</td><td>" +
+                ((ws[i] / tot) * 100).toFixed(1) + "%</td></tr>";
+            }).join("");
+          })() +
+          "</tbody></table>";
+      } else {
+        el.innerHTML = PANELS[state.step]();
+      }
+      var dirty = document.getElementById("evDirty");
+      if (dirty) {
+        dirty.addEventListener("change", function () { state.dirty = dirty.checked; renderPanel(); });
+      }
+      var adoptBtn = document.getElementById("evAdopt");
+      if (adoptBtn) {
+        adoptBtn.addEventListener("click", function () {
+          state.ab = "adopted";
+          journal.unshift("采纳 配方 v" + state.rounds + "（" + new Date().toLocaleTimeString() + "）");
+          renderPanel();
+        });
+      }
+      var rollBtn = document.getElementById("evRollback");
+      if (rollBtn) {
+        rollBtn.addEventListener("click", function () {
+          state.ab = "rolled";
+          journal.unshift("回滚到 配方 v" + (state.rounds - 1) + "（" + new Date().toLocaleTimeString() + "）");
+          renderPanel();
+        });
+      }
+    }
+
+    function render() {
+      renderChart();
+      renderMetrics();
+      renderPanel();
+    }
+
+    /* ---------- 事件绑定 ---------- */
+    flow.addEventListener("click", function (e) {
+      var b = e.target.closest("[data-step]");
+      if (!b) return;
+      state.step = b.getAttribute("data-step");
+      [].slice.call(flow.querySelectorAll(".ev-step")).forEach(function (el) {
+        el.classList.toggle("on", el === b);
+      });
+      renderPanel();
+    });
+    var epsSel = document.getElementById("evEps");
+    epsSel.addEventListener("change", function () {
+      state.eps = epsSel.value;
+      document.getElementById("evPill").textContent = state.eps === "off" ? "未开差分隐私" : "DP ε=" + state.eps;
+      render();
+    });
+    var kRange = document.getElementById("evK");
+    kRange.addEventListener("input", function () {
+      state.k = parseInt(kRange.value, 10);
+      document.getElementById("evKVal").textContent = state.k;
+      renderPanel();
+    });
+    var rRange = document.getElementById("evRounds");
+    rRange.addEventListener("input", function () {
+      state.rounds = parseInt(rRange.value, 10);
+      document.getElementById("evRoundsVal").textContent = state.rounds;
+      render();
+    });
+
+    render();
+
+    FaronDemo.evolution = {
+      setStep: function (s) { state.step = s; renderPanel(); },
+      setEps: function (v) { state.eps = String(v); epsSel.value = String(v); render(); },
+      setRounds: function (n) { state.rounds = n; rRange.value = String(n); render(); },
+      setK: function (n) { state.k = n; kRange.value = String(n); renderPanel(); },
+      setDirty: function (b) { state.dirty = !!b; renderPanel(); },
+      adopt: function () { var b = document.getElementById("evAdopt"); if (b) b.click(); },
+      rollback: function () { var b = document.getElementById("evRollback"); if (b) b.click(); },
+      simulate: simulate,
+      violations: violations,
+      samplePackage: samplePackage,
+      state: function () {
+        return {
+          step: state.step, eps: state.eps, k: state.k, rounds: state.rounds, ab: state.ab, dirty: state.dirty,
+          d0: SIM.off.d0,
+          dist: {
+            off: SIM.off.rounds[state.rounds].dist,
+            e3: SIM.e3.rounds[state.rounds].dist,
+            e1: SIM.e1.rounds[state.rounds].dist
+          },
+          journal: journal.slice()
+        };
+      }
+    };
+  })();
 
   /* ==== DEMO-ANCHOR：后续演示模块在此之上插入 ==== */
 })();
