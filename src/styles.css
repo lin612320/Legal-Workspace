@@ -739,6 +739,40 @@ button.primary.danger:hover {
   margin-top: 4px;
 }
 
+/* 触点 3：文书智能体页计划卡里的那句人话标注（R4-P0-3）
+   只在「本机已采纳配方且本计划确有被弱化步骤」时渲染 —— 见 Agent.tsx 的空值门。 */
+.agent-recipe-note {
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--surface-2, #f5f6f8);
+  border: 1px solid var(--border);
+  font-size: 12.5px;
+  line-height: 1.7;
+}
+
+.agent-recipe-note-sub {
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+/* 触点 2：首页一行状态（R4-P0-4）
+   只在「可读 + 已采纳配方」时由 Home.tsx 渲染 —— 见那里的空值门（纪律 D12）。 */
+.home-recipe-status {
+  margin: 10px 0 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--surface-2, #f5f6f8);
+  border: 1px solid var(--border);
+  font-size: 12.5px;
+  line-height: 1.7;
+}
+
+.home-recipe-status-sub {
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
 /* ---------- 翻译 ---------- */
 .translate-page {
   display: flex;

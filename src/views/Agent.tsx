@@ -14,6 +14,7 @@ import {
   rememberTask,
   makeRunner,
   refreshRuntimeRecipe,
+  getRuntimeRecipeParams,
 } from "../lib/agent";
 import { useSettings } from "../hooks/useSettings";
 import { useDocuments } from "../hooks/useDocuments";
@@ -1003,6 +1004,29 @@ export default function Agent() {
               </button>
             </div>
           </div>
+
+          {/* 触点 3（隐式化 · R4-P0-3）：把「它在适应我」翻译成人话。
+              背景（N1）：弱化是在**提示词层**做的（planFromSkeleton 把命中步骤移到末尾
+              并在 prompt 标注），`AgentStep` 里**没有** deprioritized 字段 ——
+              所以这里必须回头读运行时参数，而不是读步骤本身。
+              ⚠️ 纪律 D12：`deprioritizedSteps` 为空 → **整句不渲染**（不得虚报）。 */}
+          {(() => {
+            const rp = getRuntimeRecipeParams();
+            if (rp.deprioritizedSteps.length === 0) return null;
+            // 只列真正出现在本张计划卡里的步骤（避免显示与本任务无关的弱化项）
+            const hit = task.steps
+              .map((st) => st.name)
+              .filter((name) =>
+                rp.deprioritizedSteps.some((d) => name.toLowerCase().includes(d.toLowerCase())),
+              );
+            if (hit.length === 0) return null;
+            return (
+              <p className="agent-recipe-note">
+                已按你的习惯，把「{hit.join("」「")}」降为可选
+                <span className="agent-recipe-note-sub">（来自本机已采纳的编排配方）</span>
+              </p>
+            );
+          })()}
 
           {/* 多智能体/工具接力链可视化（P3） */}
           <div className="agent-relay" title="按执行顺序展示各角色/工具的接力过程">

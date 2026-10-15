@@ -3,11 +3,13 @@ import { Link } from "react-router-dom";
 import { NAV_ITEMS } from "../nav";
 import { Todo, useTodos } from "../hooks/useTodos";
 import { useDocuments } from "../hooks/useDocuments";
+import { useRecipeStatus } from "../hooks/useRecipeStatus";
 import { openPathFile } from "../lib/open";
 
 export default function Home() {
   const { todos, toggle, refresh } = useTodos();
   const { docs, remove: removeDoc } = useDocuments();
+  const recipe = useRecipeStatus();
 
   /** 勾选首页待办：写库失败时给出可见提示（完成后统计立即归零） */
   async function handleToggle(id: number, done: boolean) {
@@ -43,6 +45,17 @@ export default function Home() {
         <h2>你好，法律工作者</h2>
         <span className="muted">{todayStr()}</span>
       </div>
+
+      {/* 触点 2（隐式化 · R4-P0-4）：一行状态，只在**真的**调整过时出现。
+          ⚠️ 纪律 D12：无数据 / 未采纳配方 → 整行不渲染，不得用占位文案撑场面。 */}
+      {recipe.available && recipe.activeVersion !== null && (
+        <p className="home-recipe-status">
+          已根据你最近 {recipe.activeVersion.version} 次任务优化默认流程
+          <span className="home-recipe-status-sub">
+            （本机保留 v{recipe.activeVersion.version}，可在「数据设置 → 数据与隐私」恢复默认）
+          </span>
+        </p>
+      )}
 
       {/* 超期横幅 */}
       {overdue.length > 0 && (
