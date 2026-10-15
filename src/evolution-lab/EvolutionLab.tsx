@@ -21,7 +21,7 @@ import {
   type TaskLog,
 } from "../lib/evolution";
 import { adoptRecipe, rollbackRecipe } from "../lib/evolutionStore";
-import { refreshRuntimeRecipe } from "../lib/agent";
+import { refreshRuntimeRecipe, getRuntimeRecipeParams } from "../lib/agent";
 import { RECIPE_CONSUMPTION, unconsumedFields } from "../lib/recipe";
 import "./Evolution.css";
 
@@ -254,13 +254,21 @@ export default function Evolution({ initialStep = "agg" }: { initialStep?: FlowK
     return Object.keys(m).length > 0 ? m : undefined;
   }, [signals]);
 
+  // R3-P1-6：把「已采纳编排配方」的 minSamples 与 auditPassFloor 接到执行链路。
+  //   minSamples      → K 匿名门槛（同量纲：最小样本量）
+  //   auditPassFloor  → 采纳判定的质量闸门（同义：引用自检通过率下限）
+  //   ⚠️ 必须在 runs 之前算，且要进 runs 的依赖数组。
+  const recipeParams = getRuntimeRecipeParams();
+  const recipeMinSamples = recipeParams.minSamples;
+  const recipeAuditFloor = recipeParams.auditPassFloor;
+
   const runs = useMemo(
     () => ({
-      none: simulateConvergence({ rounds: TOTAL_ROUNDS, epsilon: null, measuredBaseline: measured }),
-      dp3: simulateConvergence({ rounds: TOTAL_ROUNDS, epsilon: 3, measuredBaseline: measured }),
-      dp1: simulateConvergence({ rounds: TOTAL_ROUNDS, epsilon: 1, measuredBaseline: measured }),
+      none: simulateConvergence({ rounds: TOTAL_ROUNDS, epsilon: null, measuredBaseline: measured, minSamples: recipeMinSamples, auditPassFloor: recipeAuditFloor }),
+      dp3: simulateConvergence({ rounds: TOTAL_ROUNDS, epsilon: 3, measuredBaseline: measured, minSamples: recipeMinSamples, auditPassFloor: recipeAuditFloor }),
+      dp1: simulateConvergence({ rounds: TOTAL_ROUNDS, epsilon: 1, measuredBaseline: measured, minSamples: recipeMinSamples, auditPassFloor: recipeAuditFloor }),
     }),
-    [measured],
+    [measured, recipeMinSamples, recipeAuditFloor],
   );
 
   const activeRun: ConvergenceRun = epsilon === 3 ? runs.dp3 : epsilon === 1 ? runs.dp1 : runs.none;

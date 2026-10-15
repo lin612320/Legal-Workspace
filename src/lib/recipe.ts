@@ -175,14 +175,14 @@ export const RECIPE_CONSUMPTION: Record<
     note: "被建议弱化的步骤在计划中降级为可选",
   },
   auditPassFloor: {
-    wired: false,
-    where: "（未接入）",
-    note: "已派生但尚无消费点：自检通过率阈值目前只在 Evolution 页用于 A/B 判定",
+    wired: true,
+    where: "src/evolution-lab/EvolutionLab.tsx（→ src/lib/evolution.ts · simulateConvergence）",
+    note: "作为采纳判定的质量闸门：引用自检通过率低于该底线时不得采纳",
   },
   minSamples: {
-    wired: false,
-    where: "（未接入）",
-    note: "已派生但尚无消费点：样本量门槛目前由 kAnonymityFilter 独立决定",
+    wired: true,
+    where: "src/evolution-lab/EvolutionLab.tsx（→ src/lib/evolution.ts · simulateConvergence）",
+    note: "作为 K 匿名门槛注入，取 max(配方值, K_ANON_DEMO)；演示下限不被降低",
   },
 };
 

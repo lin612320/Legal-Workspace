@@ -226,21 +226,35 @@ describe("★ 消费登记表必须与 agent.ts 源码一致（防止只改表�
     expect(new Set(registered)).toEqual(new Set(derived));
   });
 
-  it("unconsumedFields / isFullyConsumed 与表一致", () => {
+  it("unconsumedFields / isFullyConsumed 与表一致（R3-P1-6 后应全部接入）", () => {
     const un = unconsumedFields();
-    expect(un).toEqual(["auditPassFloor", "minSamples"]);
-    expect(isFullyConsumed()).toBe(un.length === 0);
-    // 当前确实还未完全接入 —— 这是如实状态，不是缺陷
-    expect(isFullyConsumed()).toBe(false);
+    // R3-P1-6 已把 auditPassFloor 与 minSamples 接入执行链路，
+    // 因此未接入集合应为空 —— 这正是「进化闭环完整」的判据。
+    expect(un).toEqual([]);
+    expect(isFullyConsumed()).toBe(true);
   });
 
   it("每个 wired:true 条目都写明了 where（可人工复核）", () => {
     for (const [k, v] of Object.entries(RECIPE_CONSUMPTION)) {
       if (v.wired) {
-        expect(v.where, `${k} 缺少 where`).toContain("agent.ts");
+        // where 指向真实消费点；允许落在 agent.ts 或 evolution-lab/evolution.ts
+        expect(
+          v.where.includes("agent.ts") || v.where.includes("evolution.ts") || v.where.includes("EvolutionLab.tsx"),
+          `${k} 的 where 未指向可复核的消费点：${v.where}`,
+        ).toBe(true);
         expect(v.where).not.toContain("未接入");
       }
     }
+  });
+
+  it("★ R3-P1-6：两个新接入的字段在源码里确有消费点", () => {
+    // 这条是「登记表 ↔ 源码一致性」的延伸：新标 wired:true 的字段必须真有消费证据
+    const LAB_SRC = readFileSync(resolve(HERE, "../src/evolution-lab/EvolutionLab.tsx"), "utf8");
+    const EVO_SRC = readFileSync(resolve(HERE, "../src/lib/evolution.ts"), "utf8");
+    expect(LAB_SRC).toContain("recipeMinSamples");
+    expect(LAB_SRC).toContain("recipeAuditFloor");
+    expect(EVO_SRC).toContain("opts.minSamples");
+    expect(EVO_SRC).toContain("opts.auditPassFloor");
   });
 });
 

@@ -925,6 +925,27 @@ export function simulateConvergence(opts: {
   clients?: SimClient[];
   /** 真实任务日志实测的基线指标（有则作为第 0 轮"实测锚点"） */
   measuredBaseline?: Partial<AbSnapshot>;
+  /**
+   * K 匿名的样本量门槛（可选注入）。
+   *
+   * 缺省 `K_ANON_DEMO` —— 与改造前行为一致。
+   * **提供它是为了把「已采纳编排配方」里的 `minSamples` 真正接到执行链路上**
+   * （配方的「可复用阈值」与这里的 K 匿名门槛是同一个量纲：最小样本量）。
+   * 取 `max(注入值, K_ANON_DEMO)`：演示下限不被降低，但用户配的更高门槛会生效。
+   */
+  minSamples?: number;
+  /**
+   * 采纳判定的**质量闸门**（可选注入）：引用自检通过率的底线。
+   *
+   * 缺省 `null` —— 与改造前行为一致（只看 A/B 判定，不额外设闸门）。
+   * **提供它是为了把「已采纳编排配方」里的 `auditPassFloor` 真正接到执行链路上**：
+   * 当最终快照的 `auditPass` 低于该底线时，直接判为不可采纳。
+   *
+   * 为什么这条闸门是合理的：`auditPass` 就是「引用自检通过率」，
+   * 而配方里的 `audit_pass_floor` 本来就是「这条比率的最低可接受值」——
+   * 两者同义，接上不会引入语义漂移。
+   */
+  auditPassFloor?: number | null;
 }): ConvergenceRun {
   const genes = opts.genes ?? RECIPE_GENES;
   const clients = opts.clients ?? SIM_CLIENTS;
@@ -933,6 +954,11 @@ export function simulateConvergence(opts: {
   const truth = truthVector(genes);
   const d0 = defaultDistance(genes);
   const rounds: RoundMetric[] = [];
+  // K 匿名门槛：演示下限与配方门槛取高者
+  const kAnon =
+    opts.minSamples && Number.isFinite(opts.minSamples)
+      ? Math.max(opts.minSamples, K_ANON_DEMO)
+      : K_ANON_DEMO;
 
   const baselineSnap: AbSnapshot = {
     label: "默认骨架（v1）",
@@ -1042,6 +1068,22 @@ export function simulateConvergence(opts: {
     finalSnap,
   );
 
+  // R3-P1-6：把「已采纳编排配方」的 auditPassFloor 接到采纳判定的质量闸门上。
+  //   `auditPass` 就是「引用自检通过率」，而配方里的 `audit_pass_floor`
+  //   本来就是这条比率的最低可接受值 —— 同义，接上不引入语义漂移。
+  //   未注入（null/undefined）时行为与改造前完全一致。
+  if (
+    decision.adopt &&
+    typeof opts.auditPassFloor === "number" &&
+    Number.isFinite(opts.auditPassFloor) &&
+    finalSnap.auditPass < opts.auditPassFloor
+  ) {
+    decision.adopt = false;
+    decision.reasons.push(
+      `引用自检通过率 ${(finalSnap.auditPass * 100).toFixed(1)}% 低于本机配方设定的质量闸门 ${(opts.auditPassFloor * 100).toFixed(0)}%，不予采纳`,
+    );
+  }
+
   // 聚合产物：把仿真客户端的匿名统计真的过一遍聚合 + 隐私链路
   const pkgs: EvolutionPackage[] = activeClients.map((c, idx) => {
     const auditPass = clamp(c.auditPass + gaussian(rng) * 0.01, 0, 1);
@@ -1083,7 +1125,7 @@ export function simulateConvergence(opts: {
     p.size_bytes = jsonBytes({ ...p, size_bytes: 0 });
   }
 
-  const anon = kAnonymityFilter(pkgs, K_ANON_DEMO);
+  const anon = kAnonymityFilter(pkgs, kAnon);
   const manifest = aggregate(anon.kept, {
     version: opts.rounds,
     now: Date.now(),
