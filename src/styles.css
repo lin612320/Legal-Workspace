@@ -625,6 +625,13 @@ button.danger-btn:hover {
   gap: 16px;
 }
 
+/* `/evolution` 深链页（隐式化后只剩「我的使用偏好」两段卡片） */
+.evolution-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
 .form-grid label.wide {
   grid-column: 1 / -1;
 }

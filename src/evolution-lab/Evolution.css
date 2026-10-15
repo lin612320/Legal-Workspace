@@ -1,0 +1,629 @@
+/* ==========================================================================
+   自我进化实验室（Evolution）
+   独立作用域样式：只在 .evo 下生效，不改动全局 src/styles.css。
+   颜色优先复用 styles.css 的设计令牌，系列色用 --evo-* 在亮/暗主题各给一套。
+   ========================================================================== */
+
+.evo {
+  --evo-s1: #3d8b6a;
+  --evo-s2: #2f6fb5;
+  --evo-s3: #a9761a;
+  --evo-s4: #7a5cc4;
+  --evo-grid: rgba(0, 0, 0, 0.08);
+  --evo-ok-bg: #ebf7ef;
+  --evo-ok-fg: #1e6b3c;
+  --evo-warn-bg: #fdf4e3;
+  --evo-warn-fg: #8a5d0d;
+  --evo-no-bg: #fdecea;
+  --evo-no-fg: #c0392b;
+  --evo-measure: #c0392b;
+}
+
+:root[data-theme="dark"] .evo {
+  --evo-s1: #63b894;
+  --evo-s2: #6fa8e0;
+  --evo-s3: #d9a63f;
+  --evo-s4: #a98ce6;
+  --evo-grid: rgba(255, 255, 255, 0.1);
+  --evo-ok-bg: rgba(30, 107, 60, 0.3);
+  --evo-ok-fg: #7fd6a0;
+  --evo-warn-bg: rgba(138, 93, 13, 0.3);
+  --evo-warn-fg: #e8c274;
+  --evo-no-bg: rgba(192, 57, 43, 0.24);
+  --evo-no-fg: #ff8a80;
+  --evo-measure: #ff8a80;
+}
+
+/* ---------- 页面头部 ---------- */
+.evo-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.evo-head h2 {
+  margin: 0 0 6px;
+  font-size: 20px;
+}
+
+.evo-sub {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.7;
+  max-width: 760px;
+}
+
+.evo-badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.evo-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+  font-size: 11.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.evo-badge-plan {
+  background: var(--evo-warn-bg);
+  color: var(--evo-warn-fg);
+  border-color: transparent;
+}
+
+.evo-badge-real {
+  background: var(--evo-ok-bg);
+  color: var(--evo-ok-fg);
+  border-color: transparent;
+}
+
+.evo-disclaimer {
+  margin: 0 0 18px;
+  padding: 10px 13px;
+  border-left: 3px solid var(--brand);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  font-size: 12.5px;
+  line-height: 1.8;
+}
+
+/* ---------- 通用卡片 ---------- */
+.evo-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.evo-grid-2 {
+  grid-template-columns: 1fr 1fr;
+}
+
+.evo-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  padding: 14px 15px;
+}
+
+.evo-card h3 {
+  margin: 0 0 10px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.evo-card h3 .evo-hint {
+  font-weight: 400;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+/* ---------- 控制条 ---------- */
+.evo-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-muted);
+  font-size: 12.5px;
+}
+
+.evo-controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+}
+
+.evo-controls select,
+.evo-controls input[type="range"] {
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 6px;
+}
+
+.evo-controls input[type="range"] {
+  padding: 0;
+  width: 110px;
+}
+
+/* ---------- 闭环流程图 ---------- */
+.evo-flow {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.evo-flow-step {
+  flex: 1 1 150px;
+  min-width: 132px;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-muted);
+  padding: 9px 10px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.evo-flow-step:hover {
+  border-color: var(--brand);
+}
+
+.evo-flow-step.on {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.evo-flow-idx {
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 1px;
+}
+
+.evo-flow-name {
+  display: block;
+  margin: 3px 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.evo-flow-desc {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+
+/* ---------- 图表 ---------- */
+.evo-chart {
+  width: 100%;
+  display: block;
+  overflow: visible;
+}
+
+.evo-axis {
+  stroke: var(--evo-grid);
+  stroke-width: 1;
+}
+
+.evo-tick {
+  fill: var(--text-muted);
+  font-size: 9.5px;
+}
+
+.evo-axis-title {
+  fill: var(--text-muted);
+  font-size: 10px;
+  letter-spacing: 0.5px;
+}
+
+.evo-line {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.evo-line-dash {
+  stroke-dasharray: 5 4;
+}
+
+.evo-point {
+  stroke: var(--surface);
+  stroke-width: 1.4;
+}
+
+.evo-measure-ring {
+  fill: none;
+  stroke: var(--evo-measure);
+  stroke-width: 1.6;
+  stroke-dasharray: 2 2;
+}
+
+.evo-legend {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.evo-legend button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.evo-legend button.off {
+  opacity: 0.38;
+}
+
+.evo-legend i {
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+/* ---------- 迷你指标卡 ---------- */
+.evo-sparks {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.evo-spark {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 9px;
+  background: var(--surface-muted);
+}
+
+.evo-spark-name {
+  font-size: 11px;
+  color: var(--text-muted);
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.evo-spark-val {
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--text);
+  margin-top: 3px;
+}
+
+.evo-spark-delta {
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.evo-up {
+  color: var(--evo-ok-fg);
+}
+
+.evo-down {
+  color: var(--evo-no-fg);
+}
+
+/* ---------- 信号面板 ---------- */
+.evo-signals {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.evo-signal {
+  display: grid;
+  grid-template-columns: 20px 1fr auto;
+  gap: 8px 10px;
+  align-items: baseline;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-muted);
+}
+
+.evo-signal-key {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.evo-signal-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.evo-signal-note {
+  grid-column: 2 / 4;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.evo-signal-src {
+  font-family: var(--mono, monospace);
+  font-size: 10.5px;
+  color: var(--text-muted);
+  opacity: 0.85;
+}
+
+.evo-signal-val {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.evo-signal.off .evo-signal-val {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+/* ---------- 表格 ---------- */
+.evo-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.evo-table th,
+.evo-table td {
+  text-align: left;
+  padding: 7px 9px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.evo-table th {
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 11.5px;
+}
+
+.evo-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.evo-tag {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.evo-tag-same {
+  background: var(--evo-ok-bg);
+  color: var(--evo-ok-fg);
+}
+
+.evo-tag-part {
+  background: var(--evo-warn-bg);
+  color: var(--evo-warn-fg);
+}
+
+.evo-tag-none {
+  background: var(--evo-no-bg);
+  color: var(--evo-no-fg);
+}
+
+/* ---------- 权重条 ---------- */
+.evo-weights {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.evo-weight {
+  display: grid;
+  grid-template-columns: 132px 1fr 52px;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+}
+
+.evo-weight-name {
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.evo-weight-bar {
+  height: 9px;
+  border-radius: 5px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.evo-weight-bar i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--evo-s2), var(--evo-s4));
+}
+
+.evo-weight-share {
+  text-align: right;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 进化包查看器 ---------- */
+.evo-pkg-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.evo-pkg-tab {
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.evo-pkg-tab.on {
+  border-color: var(--brand);
+  color: var(--brand-text, var(--brand));
+  background: var(--brand-soft);
+}
+
+.evo-json {
+  margin: 0;
+  max-height: 260px;
+  overflow: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-muted);
+  font-family: var(--mono, monospace);
+  font-size: 11.5px;
+  line-height: 1.65;
+  color: var(--text);
+  white-space: pre;
+}
+
+.evo-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: 12px;
+}
+
+.evo-check {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.evo-check-ico {
+  flex: 0 0 auto;
+}
+
+/* ---------- 决策卡 ---------- */
+.evo-decision {
+  border-radius: 9px;
+  padding: 11px 13px;
+  border: 1px solid transparent;
+  font-size: 12.5px;
+  line-height: 1.75;
+}
+
+.evo-decision.adopt {
+  background: var(--evo-ok-bg);
+  color: var(--evo-ok-fg);
+}
+
+.evo-decision.hold {
+  background: var(--evo-warn-bg);
+  color: var(--evo-warn-fg);
+}
+
+.evo-decision ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  list-style: disc;
+}
+
+.evo-kv {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin-top: 10px;
+  font-size: 12px;
+}
+
+.evo-kv dt {
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.evo-kv dd {
+  margin: 0;
+  color: var(--text);
+  word-break: break-all;
+}
+
+.evo-mono {
+  font-family: var(--mono, monospace);
+  font-size: 11.5px;
+}
+
+.evo-empty {
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 14px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  background: var(--surface-muted);
+}
+
+.evo-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+/* ---------- 响应式 ---------- */
+@media (max-width: 900px) {
+  .evo-grid-2 {
+    grid-template-columns: 1fr;
+  }
+
+  .evo-sparks {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .evo-sparks {
+    grid-template-columns: 1fr;
+  }
+
+  .evo-weight {
+    grid-template-columns: 96px 1fr 46px;
+  }
+}
