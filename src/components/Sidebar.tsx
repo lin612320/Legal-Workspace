@@ -17,14 +17,12 @@ export default function Sidebar() {
           <NavLink
             key={item.key}
             to={item.path}
-            title={item.planned ? "0.8.0 规划 · 方案稿可视化（未落地功能）" : undefined}
             className={({ isActive }) =>
               "nav-item" + (isActive ? " active" : "") + (item.planned ? " planned" : "")
             }
           >
             <span className="nav-dot" />
             <span className="nav-label">{item.label}</span>
-            {item.planned && <span className="nav-flag">方案稿</span>}
             {item.key === "todo" && badgeCount > 0 && (
               <span className="nav-badge">{badgeCount}</span>
             )}

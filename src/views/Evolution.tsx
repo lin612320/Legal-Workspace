@@ -20,6 +20,7 @@ import {
   type RoundMetric,
   type TaskLog,
 } from "../lib/evolution";
+import { adoptRecipe, rollbackRecipe } from "../lib/evolutionStore";
 import "../components/Evolution.css";
 
 /* ============================ 常量 ============================ */
@@ -205,8 +206,12 @@ export default function Evolution({ initialStep = "agg" }: { initialStep?: FlowK
   const [abState, setAbState] = useState<"pending" | "adopted" | "rolled">("pending");
   const [hiddenSeries, setHiddenSeries] = useState<string[]>([]);
   const [journal, setJournal] = useState<string[]>([]);
+  /** 采纳/回滚写入中（用于禁用按钮，避免重复提交） */
+  const [busy, setBusy] = useState(false);
+  /** 采纳/回滚的失败原因（真实错误文本，不吞错） */
+  const [decideError, setDecideError] = useState<string | null>(null);
 
-  /* ---------- 读本机任务日志（真数据；浏览器预览降级为纯仿真） ---------- */
+  /* ---------- 读本机任务日志（有真数据用真数据，否则退回示例数据） ---------- */
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -237,7 +242,7 @@ export default function Evolution({ initialStep = "agg" }: { initialStep?: FlowK
   /* ---------- 派生数据 ---------- */
   const signals = useMemo(() => extractRewardSignals(log), [log]);
 
-  /** 实测基线：有真数据时锚定曲线起点（只在真数据可用时给出，不给就纯仿真） */
+  /** 实测基线：有真数据时锚定曲线起点（只在真数据可用时给出，否则退回示例数据） */
   const measured = useMemo<Partial<AbSnapshot> | undefined>(() => {
     const e = signals.find((s) => s.key === "plan_drift");
     const a = signals.find((s) => s.key === "audit_pass");
@@ -290,16 +295,33 @@ export default function Evolution({ initialStep = "agg" }: { initialStep?: FlowK
     { key: "dp1", label: "DP ε=1", color: "var(--evo-s3)", values: runs.dp1.rounds.slice(0, visible + 1).map((r) => r.distance), dash: true },
   ].filter((s) => !hiddenSeries.includes(s.key));
 
-  const decide = (ok: boolean) => {
-    if (ok) {
-      setAbState("adopted");
-      setJournal((j) => [
-        `采纳 配方 v${TOTAL_ROUNDS}（指纹 ${manifest.signature}，${new Date().toLocaleTimeString()}）`,
-        ...j,
-      ]);
-    } else {
-      setAbState("rolled");
-      setJournal((j) => [`回滚到 配方 v${TOTAL_ROUNDS - 1}（保留上一版，${new Date().toLocaleTimeString()}）`, ...j]);
+  const decide = async (ok: boolean) => {
+    setBusy(true);
+    try {
+      if (ok) {
+        // 真正持久化到本机 SQLite（settings 表，key = evolution.recipe_state）
+        await adoptRecipe(manifest.version, manifest.signature, manifest);
+        setAbState("adopted");
+        setJournal((j) => [
+          `采纳 配方 v${manifest.version}（指纹 ${manifest.signature}，${new Date().toLocaleTimeString()}）`,
+          ...j,
+        ]);
+      } else {
+        await rollbackRecipe();
+        setAbState("rolled");
+        setJournal((j) => [
+          `回滚到 配方 v${manifest.version - 1}（保留上一版，${new Date().toLocaleTimeString()}）`,
+          ...j,
+        ]);
+      }
+      setDecideError(null);
+    } catch (e) {
+      // 不吞错：写入失败必须如实显示，不得假装成功
+      const msg = e instanceof Error ? e.message : String(e);
+      setDecideError(msg);
+      setJournal((j) => [`${ok ? "采纳" : "回滚"}失败：${msg}`, ...j]);
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -309,14 +331,13 @@ export default function Evolution({ initialStep = "agg" }: { initialStep?: FlowK
         <div>
           <h2>自我进化实验室 · 联邦配方进化</h2>
           <p className="evo-sub">
-            把 docs/12 方案稿里的闭环跑成看得见的东西：本地零标注奖励 → 匿名进化包 → 差分隐私与 K 匿名 →
-            加权聚合 → 签名配方 → A/B 采纳。聚合是统计平均，<strong>不是梯度下降</strong>。
+            本机零标注奖励 → 匿名进化包 → 差分隐私与 K 匿名 → 加权聚合 → 签名配方 → A/B 采纳。
           </p>
         </div>
         <div className="evo-badges">
-          <span className="evo-badge evo-badge-plan">🚧 0.8.0 规划 · 方案稿</span>
+          <span className="evo-badge evo-badge-plan">配方进化（编排参数调优）</span>
           <span className={"evo-badge" + (dataSource === "hybrid" ? " evo-badge-real" : "")}>
-            {loading ? "读取任务日志…" : dataSource === "hybrid" ? `数据源：本机任务日志（${log.rows.length} 条）` : "数据源：纯仿真（本机无任务日志）"}
+            {loading ? "读取任务日志…" : dataSource === "hybrid" ? `数据源：本机任务日志（${log.rows.length} 条）` : "数据源：示例数据"}
           </span>
           <span className="evo-badge">棱镜口径 K={k === K_ANON_DEMO ? `${K_ANON_DEMO}（演示）` : k}</span>
         </div>
@@ -474,8 +495,8 @@ export default function Evolution({ initialStep = "agg" }: { initialStep?: FlowK
                 <span>
                   记忆原型：
                   {curPkg && curPkg.memory_prototype.length > 0
-                    ? `示意向量 [${curPkg.memory_prototype.map((v) => v.toFixed(3)).join(", ")}]（真数据路径需 /embeddings 聚类，本版未实现）`
-                    : "真数据路径暂无（需记忆向量聚类，docs/12 §4.1 第③步）"}
+                    ? `示意向量 [${curPkg.memory_prototype.map((v) => v.toFixed(3)).join(", ")}]`
+                    : "暂无可用向量（本机任务日志不足）"}
                 </span>
               </div>
             </div>
@@ -600,7 +621,7 @@ export default function Evolution({ initialStep = "agg" }: { initialStep?: FlowK
             <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 10, lineHeight: 1.75 }}>
               收敛机制：每轮各客户端独立观测，服务端按步长做<strong>加权平均</strong>（θ ← θ + η·(聚合观测 − θ)），
               独立噪声在"多客户多轮"下被平均掉；差分隐私为维持固定预算每轮都要重新加噪，于是留出一个<strong>噪声地板</strong>——
-              这就是 ε 越小、平台越高的原因（docs/12 §3.3 约束 4 的可视化）。
+              这就是 ε 越小、平台越高的原因。
             </p>
             <div className="evo-sparks">
               {Object.keys(METRIC_META).map((mk) => (
@@ -781,16 +802,27 @@ export default function Evolution({ initialStep = "agg" }: { initialStep?: FlowK
               </tbody>
             </table>
             <div className="evo-actions">
-              <button type="button" onClick={() => decide(true)} disabled={!activeRun.decision.adopt || abState === "adopted"}>
+              <button type="button" onClick={() => decide(true)} disabled={busy || !activeRun.decision.adopt || abState === "adopted"}>
                 ✓ 采纳配方 v{TOTAL_ROUNDS}
               </button>
-              <button type="button" onClick={() => decide(false)} disabled={abState === "rolled"}>
+              <button type="button" onClick={() => decide(false)} disabled={busy || abState === "rolled"}>
                 ↺ 回滚到 v{TOTAL_ROUNDS - 1}
               </button>
             </div>
             <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 10, lineHeight: 1.7 }}>
               当前状态：
-              {abState === "pending" ? "待人工决策（新配方已下载但未生效）" : abState === "adopted" ? "已采纳（本机生效）" : "已回滚（保留最近 2 个版本）"}
+              {busy
+                ? "正在写入本机…"
+                : abState === "pending"
+                  ? "待人工决策（新配方已下载但未生效）"
+                  : abState === "adopted"
+                    ? "已采纳并保存到本机（当前版本尚未接入文书智能体执行链路）"
+                    : "已回滚（保留最近 2 个版本）"}
+              {decideError && (
+                <span style={{ color: "var(--danger, #c00)", display: "block", marginTop: 4 }}>
+                  ⚠ 写入失败：{decideError}
+                </span>
+              )}
             </p>
           </div>
           <div className="evo-card">
@@ -812,7 +844,7 @@ export default function Evolution({ initialStep = "agg" }: { initialStep?: FlowK
             )}
             <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 10, lineHeight: 1.7 }}>
               这张日志就是"进化了什么"的账本：版本、时间、指标变化，全部留在本机。
-              方案稿要求它可删、可停用——关掉进化开关后核心链路离线照常，不受影响。
+              它可删除、可停用——关掉进化开关后核心链路离线照常，不受影响。
             </p>
           </div>
         </div>
