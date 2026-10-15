@@ -13,6 +13,7 @@ import {
   deliverTask,
   rememberTask,
   makeRunner,
+  refreshRuntimeRecipe,
 } from "../lib/agent";
 import { useSettings } from "../hooks/useSettings";
 import { useDocuments } from "../hooks/useDocuments";
@@ -220,6 +221,10 @@ export default function Agent() {
     setPlanning(true);
     setMsg(null);
     try {
+      // EV2：每次制定计划前刷新一次「已采纳的编排配方」运行时参数。
+      //   放在这里而不是 planTask 内部：保持 lib 层纯同步可测，
+      //   同时保证「读取一次 → 整个任务用同一版参数」，不会中途换配方。
+      await refreshRuntimeRecipe();
       const plan = await planTask(cfg, kind, text);
       const meta = TASK_KINDS.find((k) => k.key === kind)!;
       const t: AgentTask = {

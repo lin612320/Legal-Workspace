@@ -21,6 +21,8 @@ import {
   type TaskLog,
 } from "../lib/evolution";
 import { adoptRecipe, rollbackRecipe } from "../lib/evolutionStore";
+import { refreshRuntimeRecipe } from "../lib/agent";
+import { RECIPE_CONSUMPTION, unconsumedFields } from "../lib/recipe";
 import "../components/Evolution.css";
 
 /* ============================ 常量 ============================ */
@@ -301,6 +303,8 @@ export default function Evolution({ initialStep = "agg" }: { initialStep?: FlowK
       if (ok) {
         // 真正持久化到本机 SQLite（settings 表，key = evolution.recipe_state）
         await adoptRecipe(manifest.version, manifest.signature, manifest);
+        // EV2：立刻刷新执行链路用的运行时参数，使下一个任务就用上新配方
+        await refreshRuntimeRecipe();
         setAbState("adopted");
         setJournal((j) => [
           `采纳 配方 v${manifest.version}（指纹 ${manifest.signature}，${new Date().toLocaleTimeString()}）`,
@@ -308,6 +312,7 @@ export default function Evolution({ initialStep = "agg" }: { initialStep?: FlowK
         ]);
       } else {
         await rollbackRecipe();
+        await refreshRuntimeRecipe();
         setAbState("rolled");
         setJournal((j) => [
           `回滚到 配方 v${manifest.version - 1}（保留上一版，${new Date().toLocaleTimeString()}）`,
@@ -816,7 +821,7 @@ export default function Evolution({ initialStep = "agg" }: { initialStep?: FlowK
                 : abState === "pending"
                   ? "待人工决策（新配方已下载但未生效）"
                   : abState === "adopted"
-                    ? "已采纳并保存到本机（当前版本尚未接入文书智能体执行链路）"
+                    ? "已采纳并保存到本机（编排参数将在下一个任务生效）"
                     : "已回滚（保留最近 2 个版本）"}
               {decideError && (
                 <span style={{ color: "var(--danger, #c00)", display: "block", marginTop: 4 }}>
@@ -824,6 +829,30 @@ export default function Evolution({ initialStep = "agg" }: { initialStep?: FlowK
                 </span>
               )}
             </p>
+            {/* 配方消费明细：如实列出「哪些参数已接入执行链路、哪些还没有」。
+                这张表来自 lib/recipe.ts 的 RECIPE_CONSUMPTION，
+                并由 tests/recipe.test.ts 断言与 agent.ts 源码一致。 */}
+            <details style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 8 }}>
+              <summary style={{ cursor: "pointer" }}>
+                配方参数接入情况（已接入 {Object.values(RECIPE_CONSUMPTION).filter((c) => c.wired).length}
+                /{Object.keys(RECIPE_CONSUMPTION).length}）
+              </summary>
+              <ul style={{ margin: "6px 0 0 18px", padding: 0, lineHeight: 1.7 }}>
+                {Object.entries(RECIPE_CONSUMPTION).map(([field, info]) => (
+                  <li key={field}>
+                    <code>{field}</code>
+                    {" — "}
+                    {info.wired ? "✓ 已接入执行链路" : "○ 尚未接入"}
+                    {info.note ? `：${info.note}` : ""}
+                  </li>
+                ))}
+                {unconsumedFields().length > 0 && (
+                  <li style={{ marginTop: 4 }}>
+                    未接入的 {unconsumedFields().length} 项仅为派生值，当前**不会**改变文书生成行为。
+                  </li>
+                )}
+              </ul>
+            </details>
           </div>
           <div className="evo-card">
             <h3>本机进化日志（本地留存、可删）</h3>

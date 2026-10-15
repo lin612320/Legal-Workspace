@@ -22,13 +22,16 @@ export const RECIPE_STATE_KEY = "evolution.recipe_state";
 /**
  * 配方是否已被**执行链路**消费（EV2）。
  *
- * 当前为 `false` —— 配方会被持久化、可回滚，但**没有任何代码读它去改变 agent 行为**。
- * UI 文案必须据此区分「已保存到本机」与「已改变 agent 行为」。
+ * ✅ 自 EV2 落地起为 `true`：`src/lib/recipe.ts` 的 `deriveParams()` 会把配方折算成
+ *    运行时参数，`src/lib/agent.ts` 在工具循环里真实读取
+ *    （轮数上限 / 回填条数 / 检索词补充 / 弱化步骤）。
  *
- * ⚠️ 在 EV2 落地（`lib/agent.ts` 真的读取配方参数）之前，
- *    这个常量**不得**改为 true。
+ * ⚠️ 但**并非全部派生字段都已接入**。`recipe.ts` 的 `RECIPE_CONSUMPTION`
+ *    是逐字段的事实清单（`auditPassFloor`、`minSamples` 仍为 `wired: false`），
+ *    由 `unconsumedFields()` 如实报出。UI 若展示"配方已生效"，
+ *    必须同时说明未接入的字段。
  */
-export const RECIPE_CONSUMED_BY_AGENT = false;
+export const RECIPE_CONSUMED_BY_AGENT = true;
 
 /** 一版配方快照 */
 export interface RecipeVersion {

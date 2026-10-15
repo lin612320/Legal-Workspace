@@ -17,6 +17,13 @@ import { callRust, isTauri } from "./tauri";
 import { embedTexts, cosine } from "./embed";
 import { describeSkeleton, loadSkeleton, type KgSkeleton } from "./kg";
 import type { ApiMsg } from "./ai";
+import {
+  BASELINE_PARAMS,
+  deriveParams,
+  isDeprioritized,
+  type RecipeRuntimeParams,
+} from "./recipe";
+import { activeVersion, loadRecipeState } from "./evolutionStore";
 
 // ---------------------------------------------------------------------------
 // 类型
@@ -284,7 +291,93 @@ export function planFromSkeleton(kind: TaskKind, sk: KgSkeleton): AgentStep[] {
     prompt: `${evNames.length ? `证据要点：${evNames.join("、")}。` : ""}按构成要件逐项展开，只引用工具真实返回的法条。`,
   });
   steps.push({ name: "质检：要件覆盖与引用核对", role: "qa" });
+
+  // EV2：配方消费点 ③ —— 被配方建议弱化的步骤移到末尾并标注为可选。
+  //   为什么不用新字段：AgentStep 已有 schema 被落库（task_steps 表）占用，
+  //   加字段要改 Rust 侧；用「顺序 + 提示词」表达弱化，零 schema 变更。
+  const params = getRuntimeRecipeParams();
+  if (params.deprioritizedSteps.length > 0) {
+    const keep: typeof steps = [];
+    const soft: typeof steps = [];
+    for (const s of steps) {
+      if (isDeprioritized(s.name, params)) {
+        soft.push({
+          ...s,
+          prompt: `【配方建议弱化】本步骤在已采纳的编排配方中优先级较低，可视情况跳过。${s.prompt ?? ""}`,
+        });
+      } else {
+        keep.push(s);
+      }
+    }
+    steps.length = 0;
+    steps.push(...keep, ...soft);
+  }
+
   return steps.map((s, i) => ({ ...s, seq: i, status: "pending" as const }));
+}
+
+/* ============================ EV2：配方运行时参数 ============================ */
+//
+// 设计：与 tools.ts 的 `setToolAIConfig` / `toolAiCfg` 同构 ——
+//   模块级快照 + 同步 getter + 一个 async 刷新入口。
+//   这样纯同步的 planFromSkeleton / runAgenticToolStep 能零签名变更地读到配方参数。
+//
+// 为什么不在每次执行时都 await 一次磁盘读：
+//   规划与工具循环都在热路径上，而配方变更频率极低（人工采纳才变）。
+//   由 UI 在启动与采纳后各刷新一次即可。
+
+let runtimeRecipeParams: RecipeRuntimeParams = { ...BASELINE_PARAMS };
+
+/** 同步读取当前生效的配方参数（未采纳过配方时为基线，行为与改造前一致） */
+export function getRuntimeRecipeParams(): RecipeRuntimeParams {
+  return runtimeRecipeParams;
+}
+
+/** 供测试注入（避免单测依赖 Tauri） */
+export function setRuntimeRecipeParamsForTest(p: RecipeRuntimeParams | null): void {
+  runtimeRecipeParams = p ? { ...p } : { ...BASELINE_PARAMS };
+}
+
+/**
+ * 按 `limit` 截断工具回填文本（**只影响给模型看的内容，不影响 refs**）。
+ *
+ * 工具（如 `laws_search`）自身返回条数固定；这里按配方再收一次，
+ * 目的是让模型在有限上下文里聚焦最相关的前 N 条。
+ *
+ * 判定「一条」的方式：按行切分，保留前 `limit` 个**非空行**，
+ * 其余折叠成一行提示。若文本本来就没几行，原样返回。
+ */
+export function limitToolText(text: string, limit: number): string {
+  if (!text) return text;
+  const lines = text.split("\n");
+  const nonEmptyIdx: number[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].trim().length > 0) nonEmptyIdx.push(i);
+  }
+  if (nonEmptyIdx.length <= limit) return text;
+  const cut = nonEmptyIdx[limit - 1]; // 第 limit 个非空行的下标
+  const head = lines.slice(0, cut + 1);
+  const rest = nonEmptyIdx.length - limit;
+  return [...head, `…（另有 ${rest} 条同类结果已省略，可在右侧引用清单查看全部）`].join("\n");
+}
+
+/**
+ * 从本机读取已采纳的配方并刷新运行时参数。
+ * 失败时不抛异常：退回基线，保证「配方读不到」不影响正常办案。
+ *
+ * @returns 是否成功读到某版配方
+ */
+export async function refreshRuntimeRecipe(): Promise<boolean> {
+  try {
+    const { state } = await loadRecipeState();
+    const ver = activeVersion(state);
+    runtimeRecipeParams = deriveParams(ver?.recipe ?? null);
+    return ver !== null;
+  } catch (e) {
+    console.warn("[agent] 读取编排配方失败，退回基线参数：", e);
+    runtimeRecipeParams = { ...BASELINE_PARAMS };
+    return false;
+  }
 }
 
 export async function planTask(
@@ -427,12 +520,20 @@ async function runAgenticToolStep(
   signal?: AbortSignal,
 ): Promise<string> {
   const params = step.params ?? {};
+  // EV2：配方消费点 ①② —— 读取已采纳编排配方的运行时参数。
+  //   未采纳过配方时 rp === BASELINE_PARAMS，行为与改造前完全一致。
+  const rp = getRuntimeRecipeParams();
+  const kwHint =
+    rp.extraKeywords.length > 0
+      ? `\n本机已采纳的检索词补充（优先尝试）：${rp.extraKeywords.join("、")}`
+      : "";
   const sys =
     roleSystem("retriever") +
     `\n本步目标：${step.name}\n` +
     `计划建议的检索参数：${JSON.stringify(params)}\n` +
     `可用工具会访问本地真实法库（内置 15 万条日美法条文等）。必要时连续调用多个工具；` +
-    `引用任何条文都必须来自工具真实返回。检索完成后，用一两句话汇报要点与命中数量，不要编造。`;
+    `引用任何条文都必须来自工具真实返回。检索完成后，用一两句话汇报要点与命中数量，不要编造。` +
+    kwHint;
   const msgs: ApiMsg[] = [
     { role: "system", content: sys },
     {
@@ -442,7 +543,8 @@ async function runAgenticToolStep(
   ];
 
   let finalText = "";
-  const MAX_ROUNDS = 6;
+  // EV2：轮数上限来自配方（基线 6 = 改造前的硬编码值）
+  const MAX_ROUNDS = rp.toolRoundsLimit;
   for (let round = 0; round < MAX_ROUNDS; round++) {
     const { content, tool_calls } = await chatStreamOnce(cfg, msgs, {
       tools: tools.defs,
@@ -479,7 +581,11 @@ async function runAgenticToolStep(
         emit({ step, kind: "tool_result", text: res.text });
       }
       finalText = res.text;
-      msgs.push({ role: "tool", tool_call_id: tc.id, content: res.text });
+      // EV2：配方消费点 ③ —— 限制**回填给模型**的条数。
+      //   ⚠️ 只截断文本，**不截断 refs**：
+      //      refs 是「本次工具真实返回集合」，是引用自检的判据；
+      //      砍掉它会让自检把真法条误判为「未覆盖」，属于把可信层弄坏。
+      msgs.push({ role: "tool", tool_call_id: tc.id, content: limitToolText(res.text, rp.searchLimit) });
     }
     if (round === MAX_ROUNDS - 1) {
       finalText += "\n（已达最大工具轮数，由执行器截断）";
