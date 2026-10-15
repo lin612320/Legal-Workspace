@@ -5,8 +5,6 @@ export interface NavItem {
   key: string;
   label: string;
   path: string;
-  /** 尚未对用户开放的页面：侧栏以弱化样式提示，避免被当成已落地功能 */
-  planned?: boolean;
 }
 
 export const NAV_ITEMS: NavItem[] = [
@@ -14,7 +12,6 @@ export const NAV_ITEMS: NavItem[] = [
   { key: "laws", label: "法规查询", path: "/laws" },
   { key: "templates", label: "模板库", path: "/templates" },
   { key: "agent", label: "文书智能体", path: "/agent" },
-  { key: "evolution", label: "自我进化", path: "/evolution" },
   { key: "translate", label: "翻译", path: "/translate" },
   { key: "todo", label: "待办提醒", path: "/todo" },
   { key: "settings", label: "数据设置", path: "/settings" },

@@ -1,10 +1,39 @@
 import { useState } from "react";
 import { useSettings } from "../hooks/useSettings";
+import { useRecipeStatus } from "../hooks/useRecipeStatus";
+import RecipeParamsDetails from "../components/RecipeParamsDetails";
 
 export default function Settings() {
   const { s, setAI, setBackup, setDefaultPopup, backupNow, restore, msg, setMsg } = useSettings();
   const [backupDir, setBackupDir] = useState("");
   const [restoreFile, setRestoreFile] = useState("");
+  const recipe = useRecipeStatus();
+  const [recipeMsg, setRecipeMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const onSetParticipation = async (v: "on" | "off") => {
+    setBusy(true);
+    try {
+      await recipe.setParticipation(v);
+      setRecipeMsg({ type: "ok", text: v === "on" ? "已选择参与匿名聚合。" : "已选择不参与。" });
+    } catch (e) {
+      setRecipeMsg({ type: "err", text: `保存失败：${e instanceof Error ? e.message : String(e)}` });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onResetRecipe = async () => {
+    setBusy(true);
+    try {
+      await recipe.resetRecipe();
+      setRecipeMsg({ type: "ok", text: "已恢复默认：编排参数回到基线。" });
+    } catch (e) {
+      setRecipeMsg({ type: "err", text: `恢复失败：${e instanceof Error ? e.message : String(e)}` });
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <div className="settings-page">
@@ -130,6 +159,64 @@ export default function Settings() {
         <p className="muted hint">还原会用备份文件覆盖当前数据库，操作前请先手动备份一次。</p>
       </section>
 
+      {/* 数据与隐私（隐式化触点 1 —— 隐私参与权的落点，底线项）
+          ⚠️ 纪律 D13：开关默认**不参与**；从未选择过（unset）时主动询问，不得默认勾选。 */}
+      {recipe.available && (
+        <section className="card">
+          <h3>数据与隐私</h3>
+          <p className="muted hint">
+            本机使用统计参与匿名聚合，用于改进默认工作流。
+          </p>
+
+          {recipe.needsAsk && (
+            <p className="warn">
+              你还没有选择过是否参与匿名聚合。在你选择之前，本机会按<strong>不参与</strong>处理。
+            </p>
+          )}
+
+          <label className="toggle-row">
+            <input
+              type="radio"
+              name="participation"
+              checked={recipe.participation === "on"}
+              disabled={busy}
+              onChange={() => void onSetParticipation("on")}
+            />
+            <span>参与：允许上行<strong>计数类</strong>字段，用于改进默认工作流</span>
+          </label>
+          <label className="toggle-row">
+            <input
+              type="radio"
+              name="participation"
+              checked={recipe.participation !== "on"}
+              disabled={busy}
+              onChange={() => void onSetParticipation("off")}
+            />
+            <span>不参与（默认）</span>
+          </label>
+
+          <p className="muted hint">
+            隐私承诺：只上行计数类字段，<strong>不包含文书原文</strong>。所有文书与任务数据始终留在本机。
+          </p>
+
+          <h4 className="sub-title">编排参数</h4>
+          {recipe.activeVersion ? (
+            <p className="muted hint">
+              当前生效版本：v{recipe.activeVersion.version}
+              （指纹 <code>{recipe.activeVersion.signature.slice(0, 12)}…</code>，
+              采纳于 {new Date(recipe.activeVersion.adopted_at).toLocaleString()}）
+            </p>
+          ) : (
+            <p className="muted hint">当前未采纳任何编排配方，全部参数为基线值。</p>
+          )}
+          <button className="primary" disabled={busy || !recipe.activeVersion} onClick={() => void onResetRecipe()}>
+            恢复默认（回到基线参数）
+          </button>
+
+          <RecipeParamsDetails />
+        </section>
+      )}
+
       {/* 偏好设置 */}
       <section className="card">
         <h3>其它偏好</h3>
@@ -147,6 +234,13 @@ export default function Settings() {
       {msg && (
         <div className={`settings-msg ${msg.type}`} onClick={() => setMsg(null)}>
           {msg.text}
+        </div>
+      )}
+
+      {/* 隐私/配方操作结果提示（与上方 msg 分开，避免互相覆盖） */}
+      {recipeMsg && (
+        <div className={`settings-msg ${recipeMsg.type}`} onClick={() => setRecipeMsg(null)}>
+          {recipeMsg.text}
         </div>
       )}
     </div>

@@ -25,6 +25,24 @@ import type { RecipeManifest } from "./evolution";
 export const RECIPE_STATE_KEY = "evolution.recipe_state";
 
 /**
+ * 配方变更广播（与 `useTodos` 的 `workbench:todos-changed` 同构）。
+ *
+ * 为什么需要：采纳 / 回滚 / 恢复默认 之后，**首页状态行**与**设置页折叠明细**
+ * 都是各自持有状态的实例。没有广播，它们要等整页刷新才会更新 ——
+ * 用户会看到「刚采纳了配方，首页却说没优化过」这类过期数据。
+ */
+export const EVT_RECIPE_CHANGED = "workbench:recipe-changed";
+
+/** 广播一次配方变更（内部使用，也供测试触发） */
+export function notifyRecipeChanged(): void {
+  try {
+    window.dispatchEvent(new Event(EVT_RECIPE_CHANGED));
+  } catch {
+    /* 非浏览器环境忽略 */
+  }
+}
+
+/**
  * 配方是否已被**执行链路**消费（EV2）。
  *
  * ✅ 自 EV2 落地起为 `true`：`src/lib/recipe.ts` 的 `deriveParams()` 会把配方折算成
@@ -96,6 +114,8 @@ async function persist(state: RecipeState): Promise<void> {
     key: RECIPE_STATE_KEY,
     value: JSON.stringify(state),
   });
+  // 写盘成功后才广播 —— 失败时广播会让其它页面读到未变更的状态，反而混乱
+  notifyRecipeChanged();
 }
 
 /** 历史最多保留的版本数（超出丢弃最旧的） */
@@ -146,4 +166,77 @@ export async function rollbackRecipe(): Promise<RecipeState> {
 export function activeVersion(state: RecipeState): RecipeVersion | null {
   if (state.active_version === null) return null;
   return state.history.find((h) => h.version === state.active_version) ?? null;
+}
+
+/* ======================================================================
+ * 参与意愿（R4-P0-2 触点 1 的底线项）
+ * ----------------------------------------------------------------------
+ * 本模块会涉及**本机使用统计的上行**（哪怕是加噪后的计数），
+ * 用户的**参与 / 退出权**不能只写在文档里 —— 那是「告知」，不是「可行使」。
+ * 所以设置页必须有一个**可点的、能持久化的**开关。
+ *
+ * 纪律 D13：**默认不参与**；首次使用时主动询问。
+ * 实现方式用三态而非布尔：
+ *   "unset" = 尚未选择 → 视为**不参与**，并需要向用户询问
+ *   "on"    = 明确参与
+ *   "off"   = 明确不参与
+ * 这样「没选过」与「明确选了不参与」在数据上可区分，
+ * UI 才能做到「首次询问」而不是「假装用户选过了」。
+ * ==================================================================== */
+
+/** 参与意愿在 `settings` 表中的键 */
+export const PARTICIPATION_KEY = "evolution.participation";
+
+/** 参与意愿三态；`unset` 在行为上等价于不参与，但需要询问 */
+export type Participation = "unset" | "on" | "off";
+
+/** 是否在**行为上**视为参与（只有明确 `on` 才算） */
+export function isParticipating(p: Participation): boolean {
+  return p === "on";
+}
+
+/**
+ * 读取参与意愿。
+ *
+ * - 非 Tauri 环境 → `"unset"`（不会误判为已参与）
+ * - 未设置 / 值非法 / 读取失败 → 一律 `"unset"`（**失败时偏向不参与**）
+ */
+export async function loadParticipation(): Promise<Participation> {
+  if (!isTauri()) return "unset";
+  try {
+    const raw = await invokeStrict<string | null>("settings_get", { key: PARTICIPATION_KEY });
+    if (raw === "on" || raw === "off") return raw;
+    return "unset";
+  } catch (e) {
+    // 读不到就当作未选择（不参与），绝不默认上行
+    console.error("[evolution] 读取参与意愿失败，按「未选择」处理：", e);
+    return "unset";
+  }
+}
+
+/**
+ * 写入参与意愿（`on` / `off`）。
+ *
+ * @throws 写入失败时抛出 —— 调用方必须如实显示失败，不得假装已生效
+ */
+export async function setParticipation(v: "on" | "off"): Promise<void> {
+  await invokeStrict<void>("settings_set", { key: PARTICIPATION_KEY, value: v });
+  // 参与意愿变化也会影响设置页/首页的呈现，一并广播
+  notifyRecipeChanged();
+}
+
+/**
+ * **恢复默认**：把配方回退到基线（清空 `active_version`），并保留历史以便追溯。
+ *
+ * 注意与 `rollbackRecipe()` 的区别：
+ *   - `rollbackRecipe()` 回退到**上一版**（历史里的前一版）
+ *   - `resetRecipe()`    回退到**基线**（`active_version = null`，即不使用任何配方）
+ *
+ * @throws 写入失败时抛出
+ */
+export async function resetRecipe(): Promise<RecipeState> {
+  const { state } = await loadRecipeState();
+  const next: RecipeState = { history: state.history, active_version: null };
+  await persist(next);
+  return next;
 }
