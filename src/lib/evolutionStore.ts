@@ -9,9 +9,14 @@
 // 写入失败会**抛出**（用 invokeStrict），让 UI 能如实显示失败，而不是假装成功。
 //
 // ⚠️ 边界（如实说明）：本层保证「采纳动作被持久化」。
-//    「配方被执行链路消费」（即行为真的随配方改变）是 EV2，**尚未实现**。
-//    因此本模块导出的 `RECIPE_CONSUMED_BY_AGENT = false`，
-//    UI 必须据此选择文案，不得宣称行为已改变。
+//    「配方被执行链路消费」（即行为真的随配方改变）是 EV2 —— **已落地**（见下）。
+//    ✅ 自 EV2 起 `RECIPE_CONSUMED_BY_AGENT = true`：
+//       `src/lib/recipe.ts` 的 `deriveParams()` 把配方折算成运行时参数，
+//       `src/lib/agent.ts` 在工具循环里真实读取（轮数上限 / 回填条数 / 检索词补充 / 弱化步骤）。
+//    ⚠️ 但**并非全部派生字段都已接入**：`recipe.ts` 的 `RECIPE_CONSUMPTION` 是逐字段
+//       事实清单（`auditPassFloor` / `minSamples` 仍为 `wired: false`），
+//       由 `unconsumedFields()` 如实报出。UI 若展示「配方已生效」，
+//       必须同时说明未接入的字段。
 
 import { invokeStrict, isTauri } from "./tauri";
 import type { RecipeManifest } from "./evolution";

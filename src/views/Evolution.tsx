@@ -848,7 +848,8 @@ export default function Evolution({ initialStep = "agg" }: { initialStep?: FlowK
                 ))}
                 {unconsumedFields().length > 0 && (
                   <li style={{ marginTop: 4 }}>
-                    未接入的 {unconsumedFields().length} 项仅为派生值，当前**不会**改变文书生成行为。
+                    未接入的 {unconsumedFields().length} 项仅为派生值，
+                    <strong>当前不会</strong>改变文书生成行为。
                   </li>
                 )}
               </ul>

@@ -48,21 +48,33 @@ function ensureBallRunning() {
 
 // 纯 JS 桥接轮询插件
 // 双向：读 to-workbench.json 推给浏览器；浏览器发命令 → Vite spawn 悬浮球 + 写控制文件
+//
+// ⚠️ 关于「什么时候才该真的跑」：
+//   本插件会 setInterval 轮询文件、并注册一个 POST 中间件 —— 这些只对 `vite dev` 有意义。
+//   但 vitest 也加载同一份配置，且**它的 `command` 同样是 `'serve'`**，
+//   所以 `apply: 'serve'` **挡不住测试期执行**（实测：加了之后 `configureServer` 照样跑）。
+//   因此额外用 VITEST 环境变量做判断，并在 configureServer 返回值里清理定时器
+//   （原实现写的 `closeServer()` 不是 Vite/Rollup 的任何钩子，永远不会被调用，
+//     定时器因此泄漏 —— 实测会把 vitest 吊住 10 秒并打 `close timed out`）。
+const IS_VITEST = !!process.env.VITEST;
+
 function ballBridgePlugin(): Plugin {
   const APPDATA = process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming");
   const BRIDGE_FILE = path.join(APPDATA, "floating-ball", "to-workbench.json");
   const CTRL_FILE = path.join(APPDATA, "floating-ball", "from-workbench.json");
   let lastTs = 0;
-  let timer: ReturnType<typeof setInterval> | null = null;
 
   return {
     name: "ball-bridge-poller",
     configureServer(server) {
+      // 测试环境：直接不装任何副作用（不轮询、不注册中间件、不打印）
+      if (IS_VITEST) return;
+
       console.log(`[ball-bridge] 监听 ${BRIDGE_FILE}`);
       console.log(`[ball-bridge] 控制端点 POST /__ball_cmd__ → 悬浮球进程`);
 
       // 1. floating-ball → 律政：轮询桥接文件推给浏览器
-      timer = setInterval(() => {
+      const timer = setInterval(() => {
         try {
           if (!fs.existsSync(BRIDGE_FILE)) return;
           const content = fs.readFileSync(BRIDGE_FILE, "utf8");
@@ -106,9 +118,13 @@ function ballBridgePlugin(): Plugin {
           res.end(JSON.stringify({ ok: false, error: String(e) }));
         }
       });
-    },
-    closeServer() {
-      if (timer) clearInterval(timer);
+
+      // 返回清理函数：Vite 会在 dev server 关闭时调用它。
+      // 这是 Vite 官方约定的清理方式 —— 原来写的 `closeServer()` 不是 Vite/Rollup
+      // 的任何钩子，永远不会被调用，定时器因此泄漏（实测会把 vitest 吊住 10 秒）。
+      return () => {
+        clearInterval(timer);
+      };
     },
   };
 }
