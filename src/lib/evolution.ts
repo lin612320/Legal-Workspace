@@ -439,9 +439,22 @@ export interface EvolutionPackage {
 
 /** 计算 JSON 规范化后的字节数（UTF-8） */
 export function jsonBytes(v: unknown): number {
-  const s = JSON.stringify(v);
+  let s: string;
+  try {
+    s = JSON.stringify(v);
+  } catch {
+    // 循环引用等不可序列化值：不抛异常，返回 0，由调用方自行决定如何处理。
+    // （EV7 单测发现的缺陷：原实现直接 JSON.stringify，遇到循环结构会抛 TypeError）
+    return 0;
+  }
+  if (typeof s !== "string") return 0;
+  // UTF-8 字节数：非 BMP 字符（codePoint > 0xffff，如 emoji）占 4 字节，
+  // 其余按 1/2/3 字节。原实现把一切非 ASCII 都按 3 字节算，会低估 4 字节字符。
   let n = 0;
-  for (const ch of s) n += ch.codePointAt(0)! > 0x7f ? 3 : 1;
+  for (const ch of s) {
+    const cp = ch.codePointAt(0) ?? 0;
+    n += cp <= 0x7f ? 1 : cp <= 0x7ff ? 2 : cp <= 0xffff ? 3 : 4;
+  }
   return n;
 }
 
