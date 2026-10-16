@@ -10,6 +10,7 @@ import Translate from "./views/Translate";
 import Todo from "./views/Todo";
 import Settings from "./views/Settings";
 import Import from "./views/Import";
+import EvolutionLab from "./evolution-lab/EvolutionLab";
 
 export default function App() {
   return (
@@ -28,6 +29,12 @@ export default function App() {
               docs/12-联邦配方进化方案.md 与《03-自我进化隐式化设计分析》：
               用户需要的是「状态 + 控制」，机制本身该待在文档里。 */}
           <Route path="/evolution" element={<Evolution />} />
+          {/* /evolution-lab 同样是**深链**：完整实验台（收敛曲线 / ε 与 K 可调 /
+              A-B 采纳回滚 / RL 对照 / 白名单校验 / 本机进化日志），不进左侧导航，
+              仅供答辩与内部研究直达（#/evolution-lab）。
+              机制、参数形状与诚实边界在 docs/12-联邦配方进化方案.md §十一 逐条对齐；
+              该节与实验台是「机制未被删除」的两个落点（纪律 D11）。 */}
+          <Route path="/evolution-lab" element={<EvolutionLab />} />
           <Route path="/translate" element={<Translate />} />
           <Route path="/todo" element={<Todo />} />
           <Route path="/settings" element={<Settings />} />

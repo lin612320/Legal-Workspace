@@ -12,10 +12,15 @@
 //
 // ⚠️ 原来 926 行的「机制页」（六段管线卡 / 差分隐私与 K 匿名 / 加权平均公式 /
 //    RL 对照段）**没有删除**，而是按纪律 D11「隐式 ≠ 删除」分层处理：
-//      · 全部机制与边界表述已归档到 `docs/12-联邦配方进化方案.md`
-//      · 完整实验台保留在 `src/evolution-lab/EvolutionLab.tsx`
-//        （该目录不在 UI 文案扫描范围内，供答辩 / 内部研究直达）
+//      · 完整实验台**原样保留**在 `src/evolution-lab/EvolutionLab.tsx`，
+//        并已加 `#/evolution-lab` 深链路由（不进导航，见 App.tsx）
+//      · 机制说明与**边界表述**见 `docs/12-联邦配方进化方案.md` §十一
+//        （该节由 R5-P0-1 新增：实验台对应的机制、参数形状与诚实边界）
 //      · 用户侧只留「控制 + 状态」，不解释实现
+//
+// 说明（纪律 D14）：本注释此前**误称机制与边界表述已全部另行落地**，
+//       而当时文档侧一字未改——注释断言了没发生的动作。
+//       现按事实改写：实验台保留在代码里，文档侧新增「实验台对应的机制与边界」一节。
 
 import { Link } from "react-router-dom";
 
@@ -71,16 +76,18 @@ export default function Evolution() {
       </section>
 
       <section className="card">
-        <h3>想要看实现细节？</h3>
+        <h3>想看得更深？</h3>
         <p className="muted hint">
           本页面向日常使用，只展示「被调整了什么、能否撤销」。
-          机制说明、边界声明与算法口径<strong>完整保留在文档中</strong>，
-          不在这里向使用者展开：
+          完整机制、边界声明与算法口径另有专门去处，不在这里向使用者展开：
         </p>
         <ul className="muted hint" style={{ margin: "6px 0 0", paddingLeft: 18, lineHeight: 1.9 }}>
-          <li>项目文档中的《联邦配方进化方案》—— 完整机制、边界与口径说明</li>
           <li>
-            <code>src/evolution-lab/</code> —— 完整实验台（内部研究 / 答辩直达）
+            项目文档《联邦配方进化方案》—— 完整机制、参数与边界说明
+          </li>
+          <li>
+            <Link to="/evolution-lab">打开完整实验台</Link>
+            <span className="muted">（内部研究 / 答辩演示用，不在左侧导航）</span>
           </li>
         </ul>
       </section>
