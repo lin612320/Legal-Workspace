@@ -1,6 +1,5 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
-import { NAV_ITEMS } from "../nav";
 import { Todo, useTodos } from "../hooks/useTodos";
 import { useDocuments } from "../hooks/useDocuments";
 import { useRecipeStatus } from "../hooks/useRecipeStatus";
@@ -47,10 +46,18 @@ export default function Home() {
       </div>
 
       {/* 触点 2（隐式化 · R4-P0-4）：一行状态，只在**真的**调整过时出现。
-          ⚠️ 纪律 D12：无数据 / 未采纳配方 → 整行不渲染，不得用占位文案撑场面。 */}
+          ⚠️ 纪律 D12：无数据 / 未采纳配方 → 整行不渲染，不得用占位文案撑场面。
+          ⚠️ R6-P1-1：**不得**把配方版本号当成「任务条数」。
+             `RecipeVersion.version` 是配方版本号（与进化轮次对应），
+             而 `RecipeManifest` 里**没有**样本量字段（`real_samples` 挂在匿名包上，
+             不在已采纳的版本里）。于是原本文案有两处错：
+               ① 语义错误 —— 那个 N 是版本号，不是条数；
+               ② 可能凭空 —— `source === "sim"`（协议仿真）时用户一条任务都没跑过。
+             故按 A 方案改为**不声称条数**的表述，版本号如实标为 vN。
+             （写法上刻意不把被禁的措辞抄进注释，以免污染 D16 的判据。） */}
       {recipe.available && recipe.activeVersion !== null && (
         <p className="home-recipe-status">
-          已根据你最近 {recipe.activeVersion.version} 次任务优化默认流程
+          已根据本机使用记录优化默认工作流
           <span className="home-recipe-status-sub">
             （本机保留 v{recipe.activeVersion.version}，可在「数据设置 → 数据与隐私」恢复默认）
           </span>
@@ -157,18 +164,11 @@ export default function Home() {
         </section>
       </div>
 
-      {/* 常用功能快捷入口 */}
-      <section className="card">
-        <h3>常用功能</h3>
-        <div className="quick-grid">
-          {NAV_ITEMS.map((it) => (
-            <Link to={it.path} className="quick-item" key={it.key}>
-              <span className="quick-dot" />
-              {it.label}
-            </Link>
-          ))}
-        </div>
-      </section>
+      {/* R6-P1-2：已删除「常用功能」快捷入口。
+          原先这里把 8 个导航项又平铺了一遍，而**左侧栏始终可见且是同一份列表** ——
+          首屏最值钱的位置被「再来一遍目录」占掉了，而首页真正该回答的是
+          「今天我要做什么」（今日待办 / 最近处理的文书已经回答了）。
+          「按使用频次排序留 3–4 个」的方案需要先有频次统计，本轮不引入新数据源。 */}
     </div>
   );
 }

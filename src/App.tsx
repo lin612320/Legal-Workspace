@@ -14,7 +14,11 @@ import EvolutionLab from "./evolution-lab/EvolutionLab";
 
 export default function App() {
   return (
-    <HashRouter>
+    // R6-P2-2：打开 react-router 的 v7 预置开关，消掉开发期控制台里
+    // 两条 `React Router Future Flag Warning`（v7_startTransition / v7_relativeSplatPath）。
+    // 它们不是错误，但**录屏与答辩截图时会被看到**，属于不必要的噪音。
+    // 语义不变：这两项只是让我们提前采用 v7 的行为。
+    <HashRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <Routes>
         <Route element={<Layout />}>
           <Route index element={<Navigate to="/home" replace />} />

@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { callRust, isTauri } from "../lib/tauri";
 import {
   FRE_DISCLAIMER,
   K_ANON_DEMO,
   K_ANON_PROD,
   RL_ANALOGY,
+  TOTAL_ROUNDS,
   aggregate,
   buildRealPackages,
   extractRewardSignals,
@@ -27,7 +29,10 @@ import "./Evolution.css";
 
 /* ============================ 常量 ============================ */
 
-const TOTAL_ROUNDS = 12;
+// R6-P0-1：轮数改由 `lib/evolution` 提供单一来源。
+// 候选计算（设置页「检查可用优化」）要把同一个数写进配方的 version 字段，
+// 若两处各写一份，实验台与设置页算出的版本号会漂移。
+// （原为 `const TOTAL_ROUNDS = 12;`）
 
 type FlowKey = "signal" | "pack" | "privacy" | "agg" | "manifest" | "ab";
 
@@ -340,6 +345,11 @@ export default function Evolution({ initialStep = "agg" }: { initialStep?: FlowK
 
   return (
     <div className="evo">
+      {/* R6-P1-4：本页是深链、不在导航里，页内必须有返回入口——
+          否则误入只能靠浏览器后退键，答辩演示时会很难看。 */}
+      <Link className="evo-back" to="/evolution">
+        ← 返回「我的使用偏好」
+      </Link>
       <div className="evo-head">
         <div>
           <h2>自我进化实验室 · 联邦配方进化</h2>

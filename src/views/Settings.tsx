@@ -2,6 +2,17 @@ import { useState } from "react";
 import { useSettings } from "../hooks/useSettings";
 import { useRecipeStatus } from "../hooks/useRecipeStatus";
 import RecipeParamsDetails from "../components/RecipeParamsDetails";
+import { callRust, isTauri } from "../lib/tauri";
+import {
+  computeRecipeCandidate,
+  loadLocalTaskLog,
+  type CandidateOutcome,
+} from "../lib/evolution";
+import { adoptRecipe } from "../lib/evolutionStore";
+import { getRuntimeRecipeParams, refreshRuntimeRecipe } from "../lib/agent";
+
+/** `adoptRecipe` 的第三个参数类型（`RecipeManifest`），从函数签名反推避免额外导入 */
+type ManifestArg = Parameters<typeof adoptRecipe>[2];
 
 export default function Settings() {
   const { s, setAI, setBackup, setDefaultPopup, backupNow, restore, msg, setMsg } = useSettings();
@@ -10,6 +21,58 @@ export default function Settings() {
   const recipe = useRecipeStatus();
   const [recipeMsg, setRecipeMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+
+  /* ---------- R6-P0-1：用户级「检查可用优化」 ----------
+     为什么必须放在这里：`adoptRecipe` 原先只有实验台一处调用，而实验台在
+     **两条深链之外**（#/evolution → #/evolution-lab），全仓没有导航入口。
+     结果是三条隐式触点**永远不会亮**（首页状态行 / 计划卡标注 / 「恢复默认」按钮）——
+     能撤销但不能采纳，而撤销的前提又永远不成立。
+     放在设置页：用户本来就会来这里，且不需要把 /evolution 放回导航。 */
+  const [optBusy, setOptBusy] = useState(false);
+  /** null = 还没检查过 → **不渲染结果区**（D12） */
+  const [optOutcome, setOptOutcome] = useState<CandidateOutcome | null>(null);
+
+  const onCheckOptimization = async () => {
+    setOptBusy(true);
+    setOptOutcome(null);
+    try {
+      if (!isTauri()) {
+        setOptOutcome({
+          kind: "no_data",
+          reason: "当前环境无法读取本机任务记录（浏览器预览模式下不可用）。",
+        });
+        return;
+      }
+      const log = await loadLocalTaskLog(callRust);
+      const out = await computeRecipeCandidate(log, {
+        currentParams: getRuntimeRecipeParams(),
+      });
+      setOptOutcome(out);
+    } catch (e) {
+      setOptOutcome({
+        kind: "no_data",
+        reason: `检查失败：${e instanceof Error ? e.message : String(e)}`,
+      });
+    } finally {
+      setOptBusy(false);
+    }
+  };
+
+  const onApplyCandidate = async (manifest: ManifestArg) => {
+    setOptBusy(true);
+    try {
+      // 落盘仍走 adoptRecipe（唯一写路径），随后刷新执行链路用的运行时参数
+      await adoptRecipe(manifest.version, manifest.signature, manifest);
+      await refreshRuntimeRecipe();
+      await recipe.refresh();
+      setOptOutcome(null);
+      setRecipeMsg({ type: "ok", text: `已应用优化（v${manifest.version}）。下次任务即用新流程。` });
+    } catch (e) {
+      setRecipeMsg({ type: "err", text: `应用失败：${e instanceof Error ? e.message : String(e)}` });
+    } finally {
+      setOptBusy(false);
+    }
+  };
 
   const onSetParticipation = async (v: "on" | "off") => {
     setBusy(true);
@@ -160,10 +223,20 @@ export default function Settings() {
       </section>
 
       {/* 数据与隐私（隐式化触点 1 —— 隐私参与权的落点，底线项）
-          ⚠️ 纪律 D13：开关默认**不参与**；从未选择过（unset）时主动询问，不得默认勾选。 */}
-      {recipe.available && (
-        <section className="card">
-          <h3>数据与隐私</h3>
+          ⚠️ 纪律 D13：开关默认**不参与**；从未选择过（unset）时主动询问，不得默认勾选。
+          ⚠️ 纪律 D17（R6-P1-3）：环境不可用时**仍渲染本区块**并写明原因，
+             不得整段静默消失。同一件事在 #/evolution 已明确说明，两页必须一致 ——
+             「一句话都没有」会让用户以为功能被悄悄拿掉了。 */}
+      <section className="card">
+        <h3>数据与隐私</h3>
+        {!recipe.available && (
+          <p className="muted hint">
+            当前环境无法读取本机偏好（浏览器预览模式下不可用）。
+            本区块的参与开关、编排参数与恢复默认功能仅在桌面端可用。
+          </p>
+        )}
+        {recipe.available && (
+          <>
           <p className="muted hint">
             本机使用统计参与匿名聚合，用于改进默认工作流。
           </p>
@@ -200,11 +273,79 @@ export default function Settings() {
           </p>
 
           <h4 className="sub-title">编排参数</h4>
+
+          {/* R6-P0-1 · 用户级采纳入口（"控制"必须是双向的） */}
+          <div className="recipe-check">
+            <button
+              className="primary"
+              disabled={busy || optBusy || !recipe.available}
+              onClick={() => void onCheckOptimization()}
+            >
+              {optBusy ? "正在检查…" : "检查可用优化"}
+            </button>
+            <span className="muted hint">
+              依据本机任务记录计算，只读本机数据、不联网。
+            </span>
+          </div>
+
+          {/* ⚠️ 纪律 D12：没检查过 → 整块不渲染 */}
+          {optOutcome && (
+            <div className="recipe-check-result">
+              {optOutcome.kind === "no_data" ? (
+                <p className="muted hint">暂无可用优化：{optOutcome.reason}</p>
+              ) : (
+                <>
+                  <p>
+                    可应用 <strong>v{optOutcome.value.manifest.version}</strong>
+                    {optOutcome.value.decision.improved.length > 0 && (
+                      <>（改善 {optOutcome.value.decision.improved.length} 项</>
+                    )}
+                    {optOutcome.value.decision.regressed.length > 0 ? (
+                      <>，有 {optOutcome.value.decision.regressed.length} 项回退）</>
+                    ) : (
+                      <>，无回退）</>
+                    )}
+                  </p>
+                  <p className="muted hint">
+                    依据本机 <strong>{optOutcome.value.tasksConsidered}</strong> 个任务、
+                    共 {optOutcome.value.realSamples} 条样本
+                    {optOutcome.value.droppedBuckets > 0 &&
+                      `；${optOutcome.value.droppedBuckets} 个样本量不足的分组未参与`}
+                    。
+                  </p>
+                  {optOutcome.value.decision.reasons.length > 0 && (
+                    <ul className="muted hint recipe-check-reasons">
+                      {optOutcome.value.decision.reasons.slice(0, 4).map((r, i) => (
+                        <li key={i}>{r}</li>
+                      ))}
+                    </ul>
+                  )}
+                  {!optOutcome.value.decision.adopt && (
+                    <p className="warn">
+                      该候选<strong>未通过采纳条件</strong>（无显著改善或存在回退），建议忽略。
+                    </p>
+                  )}
+                  <div className="recipe-check-actions">
+                    <button
+                      className="primary"
+                      disabled={optBusy || !optOutcome.value.decision.adopt}
+                      onClick={() => void onApplyCandidate(optOutcome.value.manifest)}
+                    >
+                      应用
+                    </button>
+                    <button className="ghost-btn" disabled={optBusy} onClick={() => setOptOutcome(null)}>
+                      忽略
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           {recipe.activeVersion ? (
             <p className="muted hint">
               当前生效版本：v{recipe.activeVersion.version}
-              （指纹 <code>{recipe.activeVersion.signature.slice(0, 12)}…</code>，
-              采纳于 {new Date(recipe.activeVersion.adopted_at).toLocaleString()}）
+              （采纳于 {new Date(recipe.activeVersion.adopted_at).toLocaleString()}）
             </p>
           ) : (
             <p className="muted hint">当前未采纳任何编排配方，全部参数为基线值。</p>
@@ -214,8 +355,9 @@ export default function Settings() {
           </button>
 
           <RecipeParamsDetails />
-        </section>
-      )}
+          </>
+        )}
+      </section>
 
       {/* 偏好设置 */}
       <section className="card">

@@ -35,6 +35,19 @@
 }
 
 /* ---------- 页面头部 ---------- */
+/* R6-P1-4：本页是深链、不在导航里，页内必须有返回入口 */
+.evo-back {
+  display: inline-block;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: var(--text-muted);
+  text-decoration: none;
+}
+.evo-back:hover {
+  color: var(--brand-text);
+  text-decoration: underline;
+}
+
 .evo-head {
   display: flex;
   align-items: flex-start;

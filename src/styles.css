@@ -746,6 +746,37 @@ button.primary.danger:hover {
   margin-top: 4px;
 }
 
+/* R6-P0-1：设置页的「检查可用优化」用户级采纳入口。
+   没有它，`adoptRecipe` 就只有实验台一条调用路径，
+   而实验台在两条深链之外 —— 三条隐式触点永远不会亮。 */
+.recipe-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 8px 0 10px;
+}
+
+.recipe-check-result {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2, rgba(0, 0, 0, 0.02));
+}
+
+.recipe-check-reasons {
+  margin: 6px 0 0 18px;
+  padding: 0;
+  line-height: 1.7;
+}
+
+.recipe-check-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
 /* 触点 3：文书智能体页计划卡里的那句人话标注（R4-P0-3）
    只在「本机已采纳配方且本计划确有被弱化步骤」时渲染 —— 见 Agent.tsx 的空值门。 */
 .agent-recipe-note {

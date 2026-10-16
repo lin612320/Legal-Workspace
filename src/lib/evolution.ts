@@ -15,11 +15,23 @@
 // ---------------------------------------------------------------------------
 
 import { fallbackPlan, TASK_KINDS, isTaskKind, type TaskKind } from "./agent";
+// 仅类型导入：`recipe.ts` 用 `import type { RecipeManifest } from "./evolution"`
+// 反向引用本模块的类型，两边都是**类型层**，不产生运行时循环依赖。
+import type { RecipeRuntimeParams } from "./recipe";
 
 /* ============================ 一、常量与口径 ============================ */
 
 /** 进化包 schema 版本（docs/12 §5.1） */
 export const FRE_SCHEMA = "fre.evolution-package/v1";
+
+/**
+ * 演示轮的固定轮数（收敛曲线横轴长度）。
+ *
+ * 原先硬编码在 `EvolutionLab.tsx` 里，候选计算（`computeRecipeCandidate`）
+ * 需要写进配方的 `version` 字段，**必须与实验台同源**，否则会出现
+ * 「实验台算出的版本号」与「设置页算出的版本号」不一致。
+ */
+export const TOTAL_ROUNDS = 12;
 
 /** 本机演示的默认随机种子：同一种子 → 同一条收敛曲线，便于复现与讲解 */
 export const FRE_DEFAULT_SEED = 20260908;
@@ -1269,3 +1281,162 @@ export const RL_ANALOGY: RlAnalogyRow[] = [
     note: "不做长程信用分配——本方案只回答「这一步该不该留在默认流水线」，不预测未来累积收益。",
   },
 ];
+
+// ---------------------------------------------------------------------------
+// 用户级采纳入口（R6-P0-1）
+//
+// 背景：`adoptRecipe` 原先只有 `EvolutionLab` 一处调用，而实验台在**两条深链之外**
+//       （`#/evolution` → `#/evolution-lab`），全仓没有导航入口。
+//       后果是三条隐式触点**永远不会亮**：
+//         · 首页状态行    门禁 `activeVersion !== null` → 永远 null
+//         · 计划卡标注    门禁 `deprioritizedSteps.length > 0` → 永远 0
+//         · 设置页「恢复默认」 `disabled={!activeVersion}` → 永远禁用
+//       也就是说：**能撤销，但不能采纳；而撤销的前提又永远不成立。**
+//
+// 本段提供**与实验台同源**的候选计算，供设置页调用。
+// ⚠️ 纪律：这里只做「算」，不做「写」——落盘仍走 `adoptRecipe`，
+//    避免出现第二条写路径导致状态不一致。
+// ---------------------------------------------------------------------------
+
+/** 从一批进化包导出可比快照（样本量加权平均；无样本的包不参与） */
+export function snapshotsFromPackages(pkgs: EvolutionPackage[]): AbSnapshot | null {
+  const usable = pkgs.filter((p) => p.sample_n > 0);
+  if (usable.length === 0) return null;
+  const totalN = usable.reduce((s, p) => s + p.sample_n, 0);
+  if (totalN <= 0) return null;
+  const wsum = (pick: (p: EvolutionPackage) => number): number =>
+    usable.reduce((s, p) => s + pick(p) * p.sample_n, 0) / totalN;
+  const unmatchedTotal = usable.reduce(
+    (s, p) => s + Object.values(p.quality.unmatched_tokens).reduce((a, b) => a + b, 0),
+    0,
+  );
+  const toolTotal = usable.reduce(
+    (s, p) => s + p.plan_edit.added_tool_sequence.reduce((a, [, n]) => a + n, 0),
+    0,
+  );
+  return {
+    label: "本机实测",
+    editRate: wsum((p) => p.plan_edit.avg_edit_steps),
+    auditPass: wsum((p) => p.quality.audit_pass_ratio),
+    lexiconUnknown: unmatchedTotal,
+    toolRounds: toolTotal / usable.length,
+  };
+}
+
+export interface RecipeCandidate {
+  decision: AbDecision;
+  manifest: RecipeManifest;
+  /** 参与聚合的真实任务数（用于如实表述，**不得**被当作版本号使用） */
+  realSamples: number;
+  tasksConsidered: number;
+  droppedBuckets: number;
+}
+
+export type CandidateOutcome =
+  | { kind: "candidate"; value: RecipeCandidate }
+  | { kind: "no_data"; reason: string };
+
+/** 读本机任务日志（最近 8 个任务取明细），供候选计算与实验台共用 */
+export async function loadLocalTaskLog(
+  callRustFn: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T | null>,
+): Promise<TaskLog> {
+  const rows = (await callRustFn<RawTaskRow[]>("task_list")) ?? [];
+  const details = new Map<number, RawTaskStep[]>();
+  for (const r of rows.slice(0, 8)) {
+    try {
+      const d = await callRustFn<{ steps?: RawTaskStep[] }>("task_get", { id: r.id });
+      if (d?.steps) details.set(r.id, d.steps);
+    } catch {
+      /* 单个任务明细取失败不致命：跳过即可，不吞整体 */
+    }
+  }
+  return { rows, details };
+}
+
+/**
+ * 用户级「检查可用优化」。
+ *
+ * **只基于本机真实任务数据**：没有任何带 `sample_n` 的真实任务时返回 `no_data`，
+ * 而不是拿协议仿真去凑一个候选 —— 否则会出现「用户一次任务没跑，
+ * 界面却说根据他的使用优化过」这类凭空表述（纪律 D12）。
+ */
+export async function computeRecipeCandidate(
+  log: TaskLog,
+  opts: {
+    epsilon?: number | null;
+    /** 参与聚合的最小任务数（默认 1；配方的 minSamples 门槛另在 K 匿名处生效） */
+    minTasks?: number;
+    /** 已采纳配方的运行时参数（用于同口径比较与质量闸门） */
+    currentParams?: RecipeRuntimeParams;
+  } = {},
+): Promise<CandidateOutcome> {
+  const minTasks = opts.minTasks ?? 1;
+  const rows = log.rows.filter((r) => isTaskKind(r.kind));
+  if (rows.length < minTasks) {
+    return {
+      kind: "no_data",
+      reason:
+        rows.length === 0
+          ? "本机还没有可用的任务记录。完成一次文书任务后再来检查。"
+          : `本机任务记录不足（${rows.length} < ${minTasks}）。`,
+    };
+  }
+
+  const epsilon = opts.epsilon ?? null;
+  const packages = buildRealPackages(log, { epsilon });
+  if (packages.length === 0) {
+    return { kind: "no_data", reason: "任务记录里没有可聚合的信号（计划/自检/词典均为空）。" };
+  }
+
+  // K 匿名：与已采纳配方同口径（取配方 minSamples 与演示下限的较大者）
+  const k = Math.max(opts.currentParams?.minSamples ?? 0, K_ANON_DEMO);
+  const anon = kAnonymityFilter(packages, k);
+  if (anon.kept.length === 0) {
+    return {
+      kind: "no_data",
+      reason: `样本量不足 K=${k}，不生成候选（这是隐私保护的一部分，不是故障）。`,
+    };
+  }
+
+  const manifest = aggregate(anon.kept, {
+    version: TOTAL_ROUNDS,
+    now: Date.now(),
+    source: "real",
+    dropped: anon.dropped.map((d) => ({ bucket: d.pkg.bucket.task_kind, reason: d.reason })),
+  });
+
+  const before = snapshotsFromPackages(anon.kept);
+  if (!before) {
+    return { kind: "no_data", reason: "聚合后没有可用样本。" };
+  }
+  // 「应用后」用配方自身的质量口径推演：自检通过率取配方设定的底线与其实际表现之高者
+  const after: AbSnapshot = {
+    label: `候选 v${manifest.version}`,
+    editRate: before.editRate,
+    auditPass: Math.max(manifest.qa_threshold_update.audit_pass_floor, before.auditPass),
+    lexiconUnknown: Math.max(0, before.lexiconUnknown - manifest.lexicon_update.length),
+    toolRounds: before.toolRounds,
+  };
+  const decision = evaluateAdoption(before, after);
+
+  // 质量闸门：与 simulateConvergence 同一条纪律 —— 低于配方底线不得采纳
+  const floor = opts.currentParams?.auditPassFloor;
+  if (decision.adopt && typeof floor === "number" && Number.isFinite(floor) && before.auditPass < floor) {
+    decision.adopt = false;
+    decision.reasons.push(
+      `引用自检通过率 ${(before.auditPass * 100).toFixed(1)}% 低于本机设定的质量闸门 ${(floor * 100).toFixed(0)}%，不予采纳`,
+    );
+  }
+
+  return {
+    kind: "candidate",
+    value: {
+      decision,
+      manifest,
+      realSamples: anon.kept.reduce((s, p) => s + p.real_samples, 0),
+      tasksConsidered: rows.length,
+      droppedBuckets: anon.dropped.length,
+    },
+  };
+}
+
