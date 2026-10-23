@@ -10,6 +10,8 @@ import {
 } from "../lib/evolution";
 import { adoptRecipe } from "../lib/evolutionStore";
 import { getRuntimeRecipeParams, refreshRuntimeRecipe } from "../lib/agent";
+import { MODEL_PRESETS, PRESET_CUSTOM } from "../lib/modelPresets";
+import { testConnection, type ConnectionTestResult } from "../lib/ai";
 
 /** `adoptRecipe` 的第三个参数类型（`RecipeManifest`），从函数签名反推避免额外导入 */
 type ManifestArg = Parameters<typeof adoptRecipe>[2];
@@ -21,6 +23,37 @@ export default function Settings() {
   const recipe = useRecipeStatus();
   const [recipeMsg, setRecipeMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+
+  /* ---------- P0-1：服务商预设 + 测试连接 ----------
+     预设只收录**有官方文档依据**的端点（见 src/lib/modelPresets.ts 的注释）。
+     用户一旦手改地址或模型名，下拉自动切到「自定义」——避免出现
+     「选的还是 DeepSeek，但地址已经是别人的」这种自相矛盾的界面状态。 */
+  const [presetId, setPresetId] = useState<string>(PRESET_CUSTOM);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<ConnectionTestResult | null>(null);
+
+  const activePreset = MODEL_PRESETS.find((p) => p.id === presetId);
+
+  /** 切预设：只填地址 + 模型名，**Key 不动**（永远由用户自己填） */
+  const onPickPreset = async (id: string) => {
+    setPresetId(id);
+    setTestResult(null);
+    const p = MODEL_PRESETS.find((x) => x.id === id);
+    if (!p) return; // 「自定义」：保留用户已填的值
+    setAI({ baseUrl: p.baseUrl, model: p.model });
+  };
+
+  /** 测试连接：结果原样展示（HTTP 状态码 + 返回体前 200 字），失败不吞异常 */
+  const onTestConnection = async () => {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const r = await testConnection(s.ai);
+      setTestResult(r);
+    } finally {
+      setTesting(false);
+    }
+  };
 
   /* ---------- R6-P0-1：用户级「检查可用优化」 ----------
      为什么必须放在这里：`adoptRecipe` 原先只有实验台一处调用，而实验台在
@@ -107,23 +140,52 @@ export default function Settings() {
         <h3>AI 接口配置（文书智能体 / 翻译共用）</h3>
         <p className="muted hint">
           OpenAI 兼容接口，供「文书智能体」规划/执行、「翻译」文本翻译与「文档全文翻译」（含 PDF / 图片转录）统一使用。
-          留空则智能体进入演示模式（翻译不可用）。DeepSeek 示例：base_url 填 https://api.deepseek.com/v1，模型填 deepseek-chat。
+          留空则智能体进入演示模式（翻译不可用）。先在上面选一个预设（地址与模型会自动填好），
+          或选「自定义」手填任意兼容地址；API Key 一律由你自己填写，本软件不预置任何厂商的 Key。
         </p>
         <div className="form-grid">
+          <label className="wide">
+            <span>选择服务商预设</span>
+            <select
+              value={presetId}
+              onChange={(e) => void onPickPreset(e.target.value)}
+            >
+              {MODEL_PRESETS.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.label}
+                </option>
+              ))}
+              <option value={PRESET_CUSTOM}>自定义（任意 OpenAI 兼容地址）</option>
+            </select>
+          </label>
+          {activePreset?.hint && (
+            <p className="muted hint wide" style={{ margin: 0 }}>
+              {activePreset.hint}{" "}
+              <a href={activePreset.source} target="_blank" rel="noreferrer">
+                官方文档
+              </a>
+            </p>
+          )}
           <label>
             <span>接口地址 base_url</span>
             <input
               value={s.ai.baseUrl}
-              onChange={(e) => setAI({ baseUrl: e.target.value })}
-              placeholder="https://api.deepseek.com/v1"
+              onChange={(e) => {
+                setPresetId(PRESET_CUSTOM);
+                setAI({ baseUrl: e.target.value });
+              }}
+              placeholder="https://你的服务商/v1"
             />
           </label>
           <label>
             <span>模型名</span>
             <input
               value={s.ai.model}
-              onChange={(e) => setAI({ model: e.target.value })}
-              placeholder="deepseek-chat（视觉/文件输入模型如 gpt-4o、qwen-vl-max）"
+              onChange={(e) => {
+                setPresetId(PRESET_CUSTOM);
+                setAI({ model: e.target.value });
+              }}
+              placeholder="按服务商文档填写（视觉/文件输入需用支持多模态的模型）"
             />
           </label>
           <label className="wide">
@@ -136,6 +198,26 @@ export default function Settings() {
             />
           </label>
         </div>
+        <div className="row-actions" style={{ marginTop: 10 }}>
+          <button
+            className="ghost-btn"
+            disabled={testing}
+            onClick={() => void onTestConnection()}
+          >
+            {testing ? "测试中…" : "测试连接"}
+          </button>
+          {testResult && (
+            <span
+              className="muted"
+              style={{ color: testResult.ok ? "var(--brand)" : "var(--danger)" }}
+            >
+              {testResult.message}
+            </span>
+          )}
+        </div>
+        {testResult?.detail && (
+          <pre className="muted hint conn-detail">{testResult.detail}</pre>
+        )}
       </section>
 
       {/* 翻译说明：不再单独配置通道 */}

@@ -54,11 +54,96 @@ export interface ToolCallRequest {
   arguments: string; // JSON 字符串，需由调用方解析
 }
 
-/** 把接口地址规整为 /chat/completions 端点。 */
+/**
+ * 把接口地址规整为 /chat/completions 端点。
+ *
+ * 支持三种写法（工单 P0-1 要求「自定义必须能用」）：
+ *   https://x.com/v1      → https://x.com/v1/chat/completions
+ *   https://x.com/v1/     → https://x.com/v1/chat/completions
+ *   https://x.com         → https://x.com/chat/completions
+ * 已经带 /chat/completions 的原样保留。
+ *
+ * **不再兜底任何厂商端点**：地址为空时抛错，由调用方提示用户去填。
+ * （旧版兜底 api.openai.com 属于「悄悄替你选了个厂商」，工单 P0-1 明确要求去掉。）
+ */
 export function normalizeEndpoint(baseUrl: string): string {
-  let b = baseUrl.trim().replace(/\/+$/, "");
-  if (b && !/\/chat\/completions$/i.test(b)) b += "/chat/completions";
-  return b || "https://api.openai.com/v1/chat/completions";
+  const b = baseUrl.trim().replace(/\/+$/, "");
+  if (!b) {
+    throw new Error("尚未填写接口地址：请到「数据设置 → AI 接口」选择预设或填自定义地址。");
+  }
+  if (/\/chat\/completions$/i.test(b)) return b;
+  return `${b}/chat/completions`;
+}
+
+/** 「测试连接」的结果：成功与否都给真实原因，不吞异常 */
+export interface ConnectionTestResult {
+  ok: boolean;
+  /** HTTP 状态码；未拿到响应（DNS/连接失败）时为 0 */
+  status: number;
+  /** 给用户看的一句话 */
+  message: string;
+  /** 返回体前 200 字（失败时尤其重要） */
+  detail?: string;
+}
+
+/**
+ * 测试连接：发一次**最小**的非流式请求，验证地址、Key、模型名三者是否可用。
+ *
+ * 纪律（工单 P0-1）：**失败要显示真实原因，不要吞异常**。
+ * 所以这里既回 HTTP 状态码，也回返回体前 200 字。
+ */
+export async function testConnection(cfg: AIConfig): Promise<ConnectionTestResult> {
+  let url: string;
+  try {
+    url = normalizeEndpoint(cfg.baseUrl);
+  } catch (e) {
+    return { ok: false, status: 0, message: e instanceof Error ? e.message : String(e) };
+  }
+  const model = cfg.model?.trim();
+  if (!model) {
+    return { ok: false, status: 0, message: "尚未填写模型名：请填写该接口对应的模型名。" };
+  }
+  if (!cfg.apiKey.trim()) {
+    return { ok: false, status: 0, message: "尚未填写 API Key。" };
+  }
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${cfg.apiKey.trim()}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "user", content: "ping" }],
+        stream: false,
+        max_tokens: 1,
+      }),
+    });
+    const text = await res.text().catch(() => "");
+    const detail = text.slice(0, 200);
+    if (res.ok) {
+      return { ok: true, status: res.status, message: `连接成功（HTTP ${res.status}），模型 ${model} 可用。`, detail };
+    }
+    // 常见状态码给出可操作的解释，但仍附带原始返回体
+    const why =
+      res.status === 401 || res.status === 403
+        ? "Key 无效、过期，或与这个地域/接口不匹配"
+        : res.status === 404
+          ? "地址或模型名不对（也可能是该地址不支持 /chat/completions）"
+          : res.status === 429
+            ? "触发限流或额度不足"
+            : "接口返回了错误";
+    return { ok: false, status: res.status, message: `连接失败（HTTP ${res.status}）：${why}。`, detail };
+  } catch (e) {
+    // 网络层失败：把原始异常信息给出来，不包装成"未知错误"
+    return {
+      ok: false,
+      status: 0,
+      message: `无法连接：${e instanceof Error ? e.message : String(e)}`,
+    };
+  }
 }
 
 export const SYSTEM_PROMPTS: Record<string, string> = {

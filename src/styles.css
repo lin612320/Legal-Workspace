@@ -545,6 +545,259 @@ button.danger-btn:hover {
   margin: 0;
 }
 
+/* ---------- 首屏重做（P0-2 / P0-3） ----------
+   目标：定位条 → 主行动 → 最近打开 → 核心能力 → 统计（配角）。
+   宽屏（1600px）下两栏铺满，不留右下整片空白。 */
+
+.home {
+  max-width: 1360px;
+  margin: 0 auto;
+  width: 100%;
+  /* 首屏铺满：由 Flex 精确分配剩余高度，避免写死数值导致溢出视口 */
+  min-height: calc(100vh - 110px);
+}
+
+/* ① 定位条 */
+.home-hero {
+  padding: 4px 0 2px;
+}
+
+.home-hero-title {
+  margin: 0 0 6px;
+  font-size: 30px;   /* 页面标题 ≫ 区块标题（16px）≫ 正文（14px） */
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+.home-hero-sub {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+/* ② 主行动区：1 主 + 2 次 */
+.home-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.cta-primary,
+.cta-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: var(--radius);
+  padding: 11px 20px;
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+/* 主按钮：统一从品牌 token 取色，不写死色值 */
+.cta-primary {
+  background: var(--brand);
+  color: var(--brand-on);
+  border-color: var(--brand);
+}
+
+.cta-primary:hover {
+  background: var(--brand-deep);
+  border-color: var(--brand-deep);
+}
+
+.cta-secondary {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--border-strong);
+  font-weight: 500;
+}
+
+.cta-secondary:hover {
+  border-color: var(--brand);
+  color: var(--brand-text);
+}
+
+/* 主区两栏：宽屏铺满，右栏给统计与待办 */
+.home-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(300px, 1fr);
+  gap: 16px;
+  align-items: stretch;      /* 两栏等高，避免右下整片空白 */
+  flex: 1 1 auto;            /* 吃掉 .home 的剩余高度（不写死 px） */
+  min-height: 0;
+}
+
+.home-main,
+.home-aside {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+/* 让每栏**最后一张卡**吃掉剩余高度（卡片自身是实底，不是留白）。
+   同时让内容纵向分布：正文在上、行动链接贴底，避免拉高后内部一片空。 */
+.home-main > .card:last-child,
+.home-aside > .card:last-child {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.home-main > .card:last-child > .step-foot,
+.home-aside > .card:last-child > .more-link {
+  margin-top: auto;
+  padding-top: 12px;
+}
+
+/* 数据与隐私 */
+.plain-list {
+  margin: 0 0 10px;
+  padding-left: 18px;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.85;
+}
+
+@media (max-width: 1100px) {
+  .home-columns {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+}
+
+/* ③ 最近打开 */
+.home-recent-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--brand);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+}
+
+.home-empty-guide p {
+  margin: 0 0 10px;
+}
+
+/* ⑤ 核心能力 */
+.home-capability p {
+  margin: 0 0 10px;
+  line-height: 1.75;
+}
+
+/* ④ 统计收成小卡片（配角） */
+.stat-mini {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.stat-mini li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--border);
+}
+
+.stat-mini li:last-child {
+  border-bottom: none;
+}
+
+.stat-mini-label {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.stat-mini-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--brand);
+}
+
+/* ⑥ 三步工作流 */
+.step-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.step-list li {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.step-no {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--brand-soft);
+  color: var(--brand-text);
+  font-size: 13px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 2px;
+}
+
+.step-list b {
+  font-size: 14px;
+}
+
+.step-list p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+@media (max-width: 900px) {
+  .step-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 设置页：测试连接的返回体（失败时看真实原因） */
+.conn-detail {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-size: 12px;
+  line-height: 1.5;
+  max-height: 160px;
+  overflow: auto;
+}
+
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .panel-head {
   display: flex;
   align-items: center;

@@ -53,7 +53,8 @@ export function isConfigured(cfg: TranslateConfig | null | undefined): boolean {
 export function configHint(): string {
   return (
     "翻译统一使用「数据设置 → AI 接口」的配置，当前尚未填写。" +
-    "请在「数据设置」里填写 base_url 与 API Key（如 DeepSeek：https://api.deepseek.com/v1，模型 deepseek-chat）。"
+    "请在「数据设置」里选一个预设（或填自定义 base_url）并填入 API Key 与模型名，" +
+    "填完可点「测试连接」确认是否可用。"
   );
 }
 

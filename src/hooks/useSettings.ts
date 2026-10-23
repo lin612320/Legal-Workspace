@@ -29,7 +29,10 @@ export interface SettingsState {
 
 const DEFAULTS: SettingsState = {
   loaded: false,
-  ai: { baseUrl: "", apiKey: "", model: "deepseek-chat" },
+  // 工单 P0-1：**不预填任何厂商**。旧版这里写死了一个 DeepSeek 的旧模型名，
+  // 等于替用户选了一家；而且那个名字在 DeepSeek 现行文档里已不存在
+  // （现为 deepseek-flash / deepseek-v4-pro）。默认一律留空，由用户在预设里选或自定义。
+  ai: { baseUrl: "", apiKey: "", model: "" },
   backup: { auto: false, intervalDays: 7, targetDir: "" },
   defaultDesktopPopup: true,
 };
