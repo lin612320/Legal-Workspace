@@ -24,6 +24,14 @@
   --danger-soft: #fdecea;
   --danger-border: #f2c4c0;
 
+  /* ---------- 语义色：成功（工单 P0-2 顺手修） ----------
+     原来「测试连接成功」直接用 --brand（品牌红）显示，读起来像报错。
+     成功/失败必须有语义区分，所以单独给一组绿。对比度按正文 4.5:1 取。
+     暖灰底上：#1f7a4d ≈ 5.6:1。 */
+  --ok: #1f7a4d;
+  --ok-soft: #eaf6ef;
+  --ok-border: #bfe3cd;
+
   /* ---------- 中性色：带红调暖灰 ---------- */
   --surface: #ffffff;
   --surface-muted: #faf7f7;
@@ -48,6 +56,10 @@
   --danger: #f2b8b5;
   --danger-soft: rgba(179, 38, 30, 0.24);
   --danger-border: rgba(242, 184, 181, 0.35);
+
+  --ok: #7ad6a1;             /* 夜间的成功绿需要提亮，否则在深底上发闷 */
+  --ok-soft: rgba(31, 122, 77, 0.24);
+  --ok-border: rgba(122, 214, 161, 0.35);
 
   --surface: #201a1a;
   --surface-muted: #171313;
@@ -774,6 +786,57 @@ button.danger-btn:hover {
   .step-list {
     grid-template-columns: 1fr;
   }
+}
+
+/* 窄屏（工单 P1-1）：900px 以下两栏已并成一栏，这里再收一档，
+   处理 640px 以下的挤压 —— 评审多半用笔记本，但缩窗口演示时不该横向溢出。 */
+@media (max-width: 640px) {
+  .home {
+    min-height: 0;          /* 窄屏不强行铺满，避免卡片被拉得很长 */
+  }
+
+  .home-hero-title {
+    font-size: 24px;
+  }
+
+  .home-hero-sub {
+    font-size: 14px;
+  }
+
+  .home-actions {
+    flex-direction: column;
+    align-items: stretch;   /* 主/次按钮各占一整行，方便手指点 */
+  }
+
+  .cta-primary,
+  .cta-secondary {
+    width: 100%;
+    padding: 12px 16px;
+  }
+
+  .home-recent-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .mini-doc-actions {
+    flex-wrap: wrap;
+  }
+}
+
+/* 设置页：指引项说明（通义法睿不预填的理由）与 Key 存储说明 */
+.preset-guide {
+  padding: 8px 10px;
+  border-left: 3px solid var(--brand);
+  background: var(--brand-soft);
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+
+.key-note {
+  line-height: 1.7;
+  padding: 8px 10px;
+  background: var(--surface-muted);
+  border-radius: var(--radius);
 }
 
 /* 设置页：测试连接的返回体（失败时看真实原因） */

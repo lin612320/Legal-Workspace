@@ -34,12 +34,19 @@ export default function Settings() {
 
   const activePreset = MODEL_PRESETS.find((p) => p.id === presetId);
 
-  /** 切预设：只填地址 + 模型名，**Key 不动**（永远由用户自己填） */
+  /** 切预设：只填地址 + 模型名，**Key 不动**（永远由用户自己填）。
+   *  `guideOnly` 的条目（通义法睿）**不预填任何东西**，而是把两栏清空 + 显示说明。
+   *  为什么清空：不清的话，下拉选着「法睿」、字段里却还留着上一家的地址，
+   *  界面上就是自相矛盾的（截图里尤其误导）。宁可空着让用户填。 */
   const onPickPreset = async (id: string) => {
     setPresetId(id);
     setTestResult(null);
     const p = MODEL_PRESETS.find((x) => x.id === id);
     if (!p) return; // 「自定义」：保留用户已填的值
+    if (p.guideOnly) {
+      setAI({ baseUrl: "", model: "" }); // Key 保持不动
+      return;
+    }
     setAI({ baseUrl: p.baseUrl, model: p.model });
   };
 
@@ -162,8 +169,16 @@ export default function Settings() {
             <p className="muted hint wide" style={{ margin: 0 }}>
               {activePreset.hint}{" "}
               <a href={activePreset.source} target="_blank" rel="noreferrer">
-                官方文档
+                {activePreset.guideOnly ? "产品介绍" : "官方文档"}
               </a>
+            </p>
+          )}
+          {/* 指引项（通义法睿）明确说明「为什么这里没有自动填」——
+              避免用户以为选中了就该能直接用，结果点测试连接才发现是空的 */}
+          {activePreset?.guideOnly && (
+            <p className="muted hint wide preset-guide" style={{ margin: 0 }}>
+              这一项<strong>不预填</strong>地址与模型名：法睿的接口地址和模型名以你在百炼控制台
+              看到的为准。开通后请把两栏填好，再点「测试连接」。
             </p>
           )}
           <label>
@@ -197,6 +212,15 @@ export default function Settings() {
               placeholder="sk-…"
             />
           </label>
+          {/* 工单 P0-2：律师对 API Key 泄露敏感，这里把「存在哪、强度如何」说清楚。
+              实测实现（src/lib/secret.ts）：XOR + hex，带 enc: 前缀，**可逆**，
+              不是强加密 —— 所以文案不能写"加密保存"，只能说"混淆"。 */}
+          <p className="muted hint wide key-note" style={{ margin: 0 }}>
+            Key 只存在本机：桌面版写入本机数据库，浏览器预览写入浏览器本地存储。
+            两种方式都只做<strong>可逆混淆</strong>（避免以明文直接暴露在存储里），
+            <strong>不是强加密</strong> —— 能登录这台电脑的人可以还原它。
+            公用电脑上请不要填写自己的 Key。
+          </p>
         </div>
         <div className="row-actions" style={{ marginTop: 10 }}>
           <button
@@ -209,7 +233,7 @@ export default function Settings() {
           {testResult && (
             <span
               className="muted"
-              style={{ color: testResult.ok ? "var(--brand)" : "var(--danger)" }}
+              style={{ color: testResult.ok ? "var(--ok)" : "var(--danger)", fontWeight: 600 }}
             >
               {testResult.message}
             </span>
