@@ -2,15 +2,19 @@
 //
 // 纪律（工单 P0-1 硬约束 / D1 不得虚报）：
 //   1. 每一条的 baseUrl 与 model 都必须有官方文档依据，`source` 写明链接；
-//   2. **查不到就整条不放**，宁可少一个预设，也不许把一个错的端点写进代码；
+//   2. **查不到就不填**，宁可少一个预设，也不许把一个猜的端点写进代码；
 //   3. 不预填任何厂商的 Key —— Key 永远由用户自己填。
 //
-// 本轮**没有**收录的厂商及原因（写在这里，免得后来又有人凭印象补上去）：
-//   · 通义法睿 —— 阿里云百炼当前的模型目录里没有它的 OpenAI 兼容模型名，
-//     也没有可引用的公开 base_url。查不到 → 按纪律**不进代码**。
-//     （百炼模型目录：https://help.aliyun.com/zh/model-studio/models）
-//   · 智谱 GLM / Kimi（月之暗面）—— 本轮**未取得**可引用的官方 base_url 原文，
-//     同样按纪律不写。需要时请用「自定义」手填，或先补依据再加入。
+// 关于「通义法睿」（本轮工单点名的法律垂类模型）：
+//   它在下拉里**有这一项**，但 baseUrl / model 都是空串、并标记 `guideOnly: true`，
+//   选中后只显示一段说明，不做任何预填。
+//   原因：阿里云百炼当前公开的模型目录（https://help.aliyun.com/zh/model-studio/models）
+//   里没有法睿的 OpenAI 兼容模型名，也查不到可引用的 base_url；法睿的产品页
+//   （https://tongyi.aliyun.com/farui）存在，但它不是 API 文档，给不出端点与模型名。
+//   所以这里**不替用户编一个地址**，只告诉他去哪里开通、填什么。
+//
+// 同样**没有**预填的厂商：智谱 GLM / Kimi（月之暗面）—— 本轮未取得可引用的官方
+// base_url 原文，需要时用「自定义」手填，或先补依据再加入。
 
 export interface ModelPreset {
   /** 稳定标识，用于下拉选项的 value */
@@ -19,15 +23,33 @@ export interface ModelPreset {
   label: string;
   /** OpenAI 兼容 base_url（未带 /chat/completions，由 normalizeEndpoint 补全） */
   baseUrl: string;
-  /** 建议模型名；空串表示该厂商的模型名由用户自填（如本地 Ollama） */
+  /** 建议模型名；空串表示该厂商的模型名由用户自填（如本地 Ollama / 法睿） */
   model: string;
   /** 依据链接：这条预设在官方文档里的出处 */
   source: string;
   /** 给用户的一句补充提示（可选） */
   hint?: string;
+  /**
+   * true = **指引项**：不对 baseUrl / model 做任何预填，选中后只展示说明。
+   * 用于「模型确实存在、但我查证不到可预填的接口」的厂商。
+   */
+  guideOnly?: boolean;
 }
 
 export const MODEL_PRESETS: ModelPreset[] = [
+  {
+    id: "farui",
+    label: "通义法睿（法律垂类 · 需在百炼开通）",
+    // 刻意留空：查不到可预填的官方端点与模型名，就不填（见文件头注释）
+    baseUrl: "",
+    model: "",
+    source: "https://tongyi.aliyun.com/farui",
+    hint:
+      "法睿需先在阿里云百炼开通。开通后把你控制台给出的 base_url 与模型名填到下面的" +
+      "「接口地址」与「模型名」两栏（百炼的 OpenAI 兼容地址形如 " +
+      "https://dashscope.aliyuncs.com/compatible-mode/v1 ）。填完点「测试连接」验证。",
+    guideOnly: true,
+  },
   {
     id: "dashscope",
     label: "阿里云百炼（千问）",
